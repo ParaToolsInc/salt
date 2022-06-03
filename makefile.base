@@ -1,7 +1,6 @@
 HEADERS=$(wildcard include/*.h)
-LLVM_CXXFLAGS=-I$(CLANG_INC_DIR) $(CXX_STD) -fno-exceptions -fno-rtti -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS
+LLVM_CXXFLAGS=-I$(CLANG_INC_DIR) $(CXX_STD) -fno-rtti -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS
 LLVM_LDFLAGS=-L$(CLANG_LIB_DIR) -Wl,-rpath,$(CLANG_LIB_DIR)
-LLVM_LIBS=-lclang -lLLVMSupport -lLLVMDemangle -lstdc++ -lpthread -lm
 CXX=$(CLANG_DIR)/clang++
 CXXFLAGS=-g -O3 -I$(PREFIX)/include -I$(PREFIX) -Wall -Werror -Wpedantic
 
@@ -12,10 +11,10 @@ install: $(PREFIX)/cparse-llvm
 	cp -f cparse-llvm $(INSTALL_PREFIX)/bin/cxxparse-llvm
 
 $(PREFIX)/parse: $(PREFIX)/src/parse.cpp $(HEADERS)
-	$(CXX) -g -O3 $(LLVM_CXXFLAGS) $(PREFIX)/src/parse.cpp -o $(PREFIX)/parse $(LLVM_LDFLAGS) $(LLVM_LIBS)
+	$(CXX) -g -O3 $(LLVM_CXXFLAGS) $(PREFIX)/src/parse.cpp -o $(PREFIX)/parse $(LLVM_LDFLAGS) 
 
 $(PREFIX)/cparse-llvm: $(PREFIX)/src/tooling.o $(PREFIX)/src/selectfile.o
-	$(CXX) $(CXXFLAGS) -o $(PREFIX)/cparse-llvm $(PREFIX)/src/tooling.o $(PREFIX)/src/selectfile.o $(LLVM_LDFLAGS) -lclang -lclang-cpp
+	$(CXX) $(CXXFLAGS) -o $(PREFIX)/cparse-llvm $(PREFIX)/src/tooling.o $(PREFIX)/src/selectfile.o $(LLVM_LDFLAGS) $(CLANG_LIBS) $(LLVM_LIBS) 
 
 $(PREFIX)/src/tooling.o: $(PREFIX)/src/tooling.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $(LLVM_CXXFLAGS) $(PREFIX)/src/tooling.cpp -o $(PREFIX)/src/tooling.o
