@@ -1,0 +1,29 @@
+# Config variables:
+#   ${full_timer_name}: "function_name [file_path {start}-{end}]"
+
+instrumentation: TAU
+include:
+  - <Profile/Profiler.h>
+
+main_insert:
+  - "    TAU_PROFILE_TIMER(tautimer, \"${full_timer_name}\", \" \", TAU_DEFAULT);"
+  - "    TAU_INIT(&argc, &argv);"
+  - "#ifndef TAU_MPI"
+  - "#ifndef TAU_SHMEM"
+  - "    TAU_PROFILE_SET_NODE(0);"
+  - "#endif /* TAU_SHMEM */"
+  - "#endif /* TAU_MPI */"
+  - "    TAU_PROFILE_START(tautimer);"
+
+function_begin_insert:
+  - "    TAU_PROFILE_TIMER(tautimer, \"${full_timer_name}\", \" \", TAU_USER);"
+  - "#ifndef TAU_MPI"
+  - "#ifndef TAU_SHMEM"
+  - "    TAU_PROFILE_SET_NODE(0);"
+  - "#endif /* TAU_SHMEM */"
+  - "#endif /* TAU_MPI */"
+  - "    TAU_PROFILE_START(tautimer);"
+
+function_end_insert:
+  - "TAU_PROFILE_STOP(tautimer);"
+

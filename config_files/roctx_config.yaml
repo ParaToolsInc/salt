@@ -1,0 +1,16 @@
+# Config variables:
+#   ${full_timer_name}: "function_name [file_path {start}-{end}]"
+
+instrumentation: ROCTX
+include:
+  - "\"roctracer_ext.h\""
+
+main_insert:
+  - "roctxRangePush(\"${full_timer_name}\");"
+
+function_begin_insert:
+  - "roctxRangePush(\"${full_timer_name}\");"
+
+function_end_insert:
+  - "roctxRangePop();"
+
