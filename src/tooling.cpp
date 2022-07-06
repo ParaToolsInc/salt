@@ -1027,12 +1027,24 @@ char **addHeadersToCommand(int *argc, const char **argv)
     int new_argc = *argc + clang_header_includes_length;
     char **new_argv = (char **)(calloc(new_argc, sizeof(char *)));
     int new_i = 0;
+    bool found_dash = false; // Marker for finding "--"
 
-    for (int i = 0; i < *argc; i++)
+    for (int i = 0; i <= *argc; i++)
     {
-        if (strcmp(argv[i], "--") == 0)
+        if (i == *argc && found_dash) break;
+        bool at_dash = false;
+        if ((i == *argc) ||                             // found "--"
+            (at_dash = strcmp(argv[i], "--") == 0))     // Reached end of argv without finding "--"
         {
-            new_argv[new_i] = strdup(argv[i]);
+            if (at_dash) {
+                found_dash = true;
+                new_argv[new_i] = strdup(argv[i]);
+            }
+            else
+            {
+                new_argv = (char **)realloc(new_argv, (++new_argc)*sizeof(char *));
+                new_argv[new_i] = strdup("--");
+            }
             new_i++;
             for (int j = 0; j < clang_header_includes_length; j++)
             {
