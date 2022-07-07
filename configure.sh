@@ -1,6 +1,7 @@
 #!/bin/bash
 
-llvm_path=$(spack location --install-dir llvm)
+#llvm_path=$(spack location --install-dir llvm)
+llvm_path=$LLVM_DOE_ROOT
 clang_path="$llvm_path/bin"
 clang_inc_path="$llvm_path/include"
 clang_lib_path="$llvm_path/lib"
@@ -18,7 +19,7 @@ else
     clang_path=$(dirname $(which clang))
 fi
 
-arch_dir=$(./../../../utils/archfind)
+#arch_dir=$(./../../../utils/archfind)
 prefix=`pwd`
 install_prefix=`pwd`
 
@@ -73,7 +74,8 @@ fi
 clang_version=`${clang_path}/llvm-config --version`
 llvm_libs=`${clang_path}/llvm-config --libs` 
 llvm_libs="$llvm_libs -lrt -ldl -lpthread -lm -lz -ltinfo"
-clang_libs="-lclang -lclangFrontendTool -lclangRewriteFrontend -lclangDynamicASTMatchers -lclangFormat -lclangTooling -lclangFrontend -lclangToolingCore -lclangASTMatchers -lclangCrossTU -lclangStaticAnalyzerCore -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerFrontend -lclangARCMigrate -lclangParse -lclangDriver -lclangSerialization -lclangRewrite -lclangSema -lclangEdit -lclangIndex -lclangAnalysis -lclangAST -lclangLex -lclangBasic -lclangToolingInclusions -lclangCodeGen"
+#clang_libs="-lclang -lclangFrontendTool -lclangRewriteFrontend -lclangDynamicASTMatchers -lclangFormat -lclangTooling -lclangFrontend -lclangToolingCore -lclangASTMatchers -lclangCrossTU -lclangStaticAnalyzerCore -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerFrontend -lclangARCMigrate -lclangParse -lclangDriver -lclangSerialization -lclangRewrite -lclangSema -lclangEdit -lclangIndex -lclangAnalysis -lclangAST -lclangLex -lclangBasic -lclangToolingInclusions -lclangCodeGen"
+clang_libs="-lclang -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic -lclangRewrite -lclangRewriteFrontend"
 
 echo "pdt-llvm: Found clang in $clang_path"
 echo "pdt-llvm: Setting clang include path to $clang_inc_path"

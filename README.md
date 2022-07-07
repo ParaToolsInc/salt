@@ -24,6 +24,13 @@ git clone https://github.com/ParaToolsInc/salt.git
 Configure and build:
 ```
 cd salt
+docker build . -t saltimage --no-cache
+docker run -it --tmpfs=/dev/shm:rw,nosuid,nodev,exec --privileged -v $(pwd):/home/salt saltimage
 ./configure
 make
+```
+
+Example:
+```
+./cparse-llvm tests/hello.c 
 ```
