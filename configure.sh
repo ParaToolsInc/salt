@@ -16,12 +16,11 @@ then
     echo "pdt-llvm: Otherwise, we'll assume you passed in --clang-dir=/path."
 else
     # OK, we have clang, so extract some info
-    clang_path=$(dirname $(which clang))
+    clang_path=$(dirname "$(which clang)")
 fi
 
-#arch_dir=$(./../../../utils/archfind)
-prefix=`pwd`
-install_prefix=`pwd`
+prefix="$(pwd)"
+install_prefix="$(pwd)"
 
 usage() {
   echo "Usage: ./configure.sh [options]"
@@ -58,7 +57,7 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     *)
-      printf "* ERROR: Invalid argument: %s\n" $1
+      printf "* ERROR: Invalid argument: %s\n" "$1"
       printf "* Run configure.sh --help to print usage.\n"
       exit 1
   esac
@@ -66,15 +65,14 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "${clang_inc_path}" == "" ] ; then
-    clang_inc_path=$(dirname $clang_path)/include
+    clang_inc_path=$(dirname "$clang_path")/include
 fi
 if [ "${clang_lib_path}" == "" ] ; then
-    clang_lib_path=$(dirname $clang_path)/lib
+    clang_lib_path=$(dirname "$clang_path")/lib
 fi
-clang_version=`${clang_path}/llvm-config --version`
-llvm_libs=`${clang_path}/llvm-config --libs` 
+clang_version=$("${clang_path}/llvm-config" --version)
+llvm_libs=$("${clang_path}/llvm-config" --libs)
 llvm_libs="$llvm_libs -lrt -ldl -lpthread -lm -lz -ltinfo"
-#clang_libs="-lclang -lclangFrontendTool -lclangRewriteFrontend -lclangDynamicASTMatchers -lclangFormat -lclangTooling -lclangFrontend -lclangToolingCore -lclangASTMatchers -lclangCrossTU -lclangStaticAnalyzerCore -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerFrontend -lclangARCMigrate -lclangParse -lclangDriver -lclangSerialization -lclangRewrite -lclangSema -lclangEdit -lclangIndex -lclangAnalysis -lclangAST -lclangLex -lclangBasic -lclangToolingInclusions -lclangCodeGen"
 clang_libs="-lclang -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic -lclangRewrite -lclangRewriteFrontend"
 
 echo "pdt-llvm: Found clang in $clang_path"
@@ -93,23 +91,24 @@ echo "Setting std to $cxx_std"
 
 rm -f Makefile
 touch Makefile
-echo "CLANG_DIR=$clang_path" >> Makefile
-echo "CLANG_INC_DIR=$clang_inc_path" >> Makefile
-echo "CLANG_LIB_DIR=$clang_lib_path" >> Makefile
-echo "ARCH=$arch_dir" >> Makefile
-echo "PREFIX=$prefix" >> Makefile
-echo "INSTALL_PREFIX=$install_prefix" >> Makefile
-echo "CXX_STD=$cxx_std" >> Makefile
-echo "LLVM_LIBS=$llvm_libs" >> Makefile
-echo "CLANG_LIBS=$clang_libs" >> Makefile
-echo "" >> Makefile
-cat makefile.base >> Makefile
+
+{ echo "CLANG_DIR=$clang_path";
+  echo "CLANG_INC_DIR=$clang_inc_path";
+  echo "CLANG_LIB_DIR=$clang_lib_path";
+  echo "ARCH=$arch_dir";
+  echo "PREFIX=$prefix";
+  echo "INSTALL_PREFIX=$install_prefix";
+  echo "CXX_STD=$cxx_std";
+  echo "LLVM_LIBS=$llvm_libs";
+  echo "CLANG_LIBS=$clang_libs"
+  echo "";
+  cat makefile.base; } >> Makefile
 
 touch empty.c
-${clang_path}/clang -E -v empty.c >& clang.out
+"${clang_path}/clang" -E -v empty.c >& clang.out
 
 # Get the path to clang
-clang_path=$(dirname $(dirname $(readlink -f ${clang_path}/clang)))
+clang_path=$(dirname "$(dirname "$(readlink -f "${clang_path}/clang")")")
 # Make a regular expression containing the path to clang
 #clang_path_expression="^${clang_path}/lib.*"
 clang_path_expression="^.*/lib/clang/.*$"
@@ -129,8 +128,8 @@ headers=False
 expression='^#include .+ search starts here:$'
 headerstring=''
 length=0
-while read line; do
-    line=`echo $line | xargs`
+while read -r line; do
+    line=$(echo "$line" | xargs)
     if [[ $line =~ $expression ]] ; then
         headers=True
         continue
@@ -147,7 +146,7 @@ while read line; do
             else
                 headerstring="${headerstring}, \"-I$line\""
             fi
-            let "length=length+1"
+            ((length+=1))
         fi
     fi
 done < clang.out
