@@ -92,7 +92,7 @@ project(SALT
 find_package(LLVM REQUIRED CONFIG)
 
 # Set the LLVM components needed by salt
-set(LLVM_NEEDED_COMPONENTS core demangle support)
+set(LLVM_NEEDED_COMPONENTS demangle support)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
@@ -101,28 +101,33 @@ llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_NEEDED_COMPONENTS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-message(STATUS "LLVM include directory(s): ${LLVM_INCLUDE_DIRS}")
+message(STATUS "Using LLVMConfig.cmake in:\n\t${LLVM_DIR}")
+message(STATUS "LLVM include directory(s):\n\t${LLVM_INCLUDE_DIRS}")
 message(STATUS "LLVM_LIBS (used by salt): ${LLVM_LIBS}")
 message(STATUS "LLVM_DEFINITIONS: ${LLVM_DEFINITIONS}")
 message(STATUS "LLVM_ENABLE_ASSERTIONS: ${LLVM_ENABLE_ASSERTIONS}")
 message(STATUS "LLVM_ENABLE_EH: ${LLVM_ENABLE_EH}")
 message(STATUS "LLVM_ENABLE_RTTI: ${LLVM_ENABLE_RTTI}")
-message(STATUS "LLVM_TOOLS_BINARY_DIR: ${LLVM_TOOLS_BINARY_DIR}")
+message(STATUS "LLVM_TOOLS_BINARY_DIR:\n\t${LLVM_TOOLS_BINARY_DIR}")
 
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
-add_definitions(${LLVM_DEFINITIONS_LIST})
 
 list(LENGTH LLVM_INCLUDE_DIRS NUM_CLANG_HEADER_INCLUDES)
-list(JOIN LLVM_INCLUDE_DIRS ", "-I CLANG_HEADER_INCLUDES)
-set(CLANG_HEADER_INCLUDES "-I${CLANG_HEADER_INCLUDES}")
+list(JOIN LLVM_INCLUDE_DIRS "\", \"-I" CLANG_HEADER_INCLUDES)
+set(CLANG_HEADER_INCLUDES "\"-I${CLANG_HEADER_INCLUDES}\"")
 message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
 message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
 configure_file(
   "${CMAKE_SOURCE_DIR}/include/clang_header_includes.h.in" "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
   @ONLY)
 
+# Add an interface library so that we don't have to repeat ourselves
+add_library(SALT_LLVM_TOOLING INTERFACE)
+target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
+target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
+target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
+target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${LLVM_LIBS})
 
 #---------------------------------
 # List the header and source files
@@ -140,4 +145,12 @@ set_source_files_properties(
   GENERATED TRUE
 )
 
-set(CPARSE_LLVM_SRC parse.cpp tooling.cpp selectfile.cpp)
+set(CPARSE_LLVM_SRCS parse.cpp tooling.cpp selectfile.cpp)
+
+#---------------------
+# Add the main targets
+#---------------------
+# If we refactor into a library that executables link against it will simplify this and reduce repitition
+add_executable(cparse-llvm)
+target_sources(cparse-llvm ${CPARSE_LLVM_SRCS})
+target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
