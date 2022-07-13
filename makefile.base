@@ -13,11 +13,14 @@ install: $(PREFIX)/cparse-llvm
 $(PREFIX)/parse: $(PREFIX)/src/parse.cpp $(HEADERS)
 	$(CXX) -g -O3 $(LLVM_CXXFLAGS) $(PREFIX)/src/parse.cpp -o $(PREFIX)/parse $(LLVM_LDFLAGS) 
 
-$(PREFIX)/cparse-llvm: $(PREFIX)/src/tooling.o $(PREFIX)/src/selectfile.o
-	$(CXX) -g $(CXXFLAGS) -o $(PREFIX)/cparse-llvm $(PREFIX)/src/tooling.o $(PREFIX)/src/selectfile.o $(LLVM_LDFLAGS) $(CLANG_LIBS) $(LLVM_LIBS) 
+$(PREFIX)/cparse-llvm: $(PREFIX)/src/frontend.o $(PREFIX)/src/selectfile.o $(PREFIX)/src/instrumentor.o
+	$(CXX) $(CXXFLAGS) -o $(PREFIX)/cparse-llvm $(PREFIX)/src/frontend.o $(PREFIX)/src/selectfile.o $(PREFIX)/src/instrumentor.o $(LLVM_LDFLAGS) $(CLANG_LIBS) $(LLVM_LIBS) 
 
-$(PREFIX)/src/tooling.o: $(PREFIX)/src/tooling.cpp $(HEADERS)
-	$(CXX) $(CXXFLAGS) -c $(LLVM_CXXFLAGS) $(PREFIX)/src/tooling.cpp -o $(PREFIX)/src/tooling.o
+$(PREFIX)/src/frontend.o: $(PREFIX)/src/frontend.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $(LLVM_CXXFLAGS) $(PREFIX)/src/frontend.cpp -o $(PREFIX)/src/frontend.o
+
+$(PREFIX)/src/instrumentor.o: $(PREFIX)/src/instrumentor.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $(LLVM_CXXFLAGS) $(PREFIX)/src/instrumentor.cpp -o $(PREFIX)/src/instrumentor.o
 
 $(PREFIX)/src/selectfile.o: $(PREFIX)/src/selectfile.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $(LLVM_CXXFLAGS) $(PREFIX)/src/selectfile.cpp -o $(PREFIX)/src/selectfile.o
