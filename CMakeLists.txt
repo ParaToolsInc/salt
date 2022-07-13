@@ -91,17 +91,32 @@ project(SALT
 # See https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project for more information
 find_package(LLVM REQUIRED CONFIG)
 
+# Set the LLVM components needed by salt
+set(LLVM_NEEDED_COMPONENTS core demangle support)
+
+# Find the libraries that correspond to the LLVM components
+# that we wish to use
+llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_NEEDED_COMPONENTS})
+
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include directory(s): ${LLVM_INCLUDE_DIRS}")
+message(STATUS "LLVM_LIBS (used by salt): ${LLVM_LIBS}")
+message(STATUS "LLVM_DEFINITIONS: ${LLVM_DEFINITIONS}")
+message(STATUS "LLVM_ENABLE_ASSERTIONS: ${LLVM_ENABLE_ASSERTIONS}")
+message(STATUS "LLVM_ENABLE_EH: ${LLVM_ENABLE_EH}")
+message(STATUS "LLVM_ENABLE_RTTI: ${LLVM_ENABLE_RTTI}")
+message(STATUS "LLVM_TOOLS_BINARY_DIR: ${LLVM_TOOLS_BINARY_DIR}")
 
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
 list(LENGTH LLVM_INCLUDE_DIRS NUM_CLANG_HEADER_INCLUDES)
-list(JOIN LLVM_INCLUDE_DIRS '", "-I' CLANG_HEADER_INCLUDES)
-set(CLANG_HEADER_INCLUDES '"-I${CLANG_HEADER_INCLUDES}"')
+list(JOIN LLVM_INCLUDE_DIRS ", "-I CLANG_HEADER_INCLUDES)
+set(CLANG_HEADER_INCLUDES "-I${CLANG_HEADER_INCLUDES}")
 message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
 message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
 configure_file(
@@ -112,7 +127,11 @@ configure_file(
 #---------------------------------
 # List the header and source files
 #---------------------------------
+
+# Explicitly listing source files is safer than globbing them--you might accidentally put
+# an experiment or back up file in include or src and not realize it.
 set(SALT_HEADER_FILES dprint.hpp selectfile.hpp tau_datatypes.h tooling.hpp)
+
 list(TRANSFORM SALT_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
 list(APPEND SALT_HEADER_FILES "${CMAKE_BINARY_DIR}/include/clang_header_includes.h")
 set_source_files_properties(
@@ -120,3 +139,5 @@ set_source_files_properties(
   PROPERTIES
   GENERATED TRUE
 )
+
+set(CPARSE_LLVM_SRC parse.cpp tooling.cpp selectfile.cpp)
