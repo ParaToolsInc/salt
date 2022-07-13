@@ -152,5 +152,5 @@ set(CPARSE_LLVM_SRCS parse.cpp tooling.cpp selectfile.cpp)
 #---------------------
 # If we refactor into a library that executables link against it will simplify this and reduce repitition
 add_executable(cparse-llvm)
-target_sources(cparse-llvm ${CPARSE_LLVM_SRCS})
+target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
