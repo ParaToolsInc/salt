@@ -156,4 +156,5 @@ add_executable(cparse-llvm)
 target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
 target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
 target_compile_features(cparse-llvm PUBLIC cxx_std_14)
+target_compile_options(cparse-llvm PUBLIC -std=c++14 -fno-exceptions -fno-rtti -Wall -Werror -Wpedantic)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
