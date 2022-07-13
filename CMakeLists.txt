@@ -127,7 +127,7 @@ add_library(SALT_LLVM_TOOLING INTERFACE)
 target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
-target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${LLVM_LIBS})
+target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${LLVM_LIBS} -lclang)
 
 #---------------------------------
 # List the header and source files
@@ -146,6 +146,7 @@ set_source_files_properties(
 )
 
 set(CPARSE_LLVM_SRCS parse.cpp tooling.cpp selectfile.cpp)
+list(TRANSFORM CPARSE_LLVM_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 
 #---------------------
 # Add the main targets
@@ -153,4 +154,6 @@ set(CPARSE_LLVM_SRCS parse.cpp tooling.cpp selectfile.cpp)
 # If we refactor into a library that executables link against it will simplify this and reduce repitition
 add_executable(cparse-llvm)
 target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
+target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
+target_compile_features(cparse-llvm PUBLIC cxx_std_14)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
