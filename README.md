@@ -14,7 +14,7 @@ Configure and build:
 cd salt
 docker build . -t saltimage --no-cache
 docker run -it --tmpfs=/dev/shm:rw,nosuid,nodev,exec --privileged -v $(pwd):/home/salt saltimage
-./configure
+./configure.sh
 make
 ```
 
