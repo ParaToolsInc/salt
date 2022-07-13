@@ -1,5 +1,5 @@
 #include <string>
-#include "tooling.hpp"
+#include "instrumentor.hpp"
 #include "selectfile.hpp"
 
 std::vector<inst_loc*> inst_locations;
