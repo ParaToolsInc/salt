@@ -1,2 +1,2 @@
-const char * const clang_header_includes[] = {"-I@LLVM_INCLUDE_DIRS@"};
-const int clang_header_includes_length{1};
+const char * const clang_header_includes[] = {@CLANG_HEADER_INCLUDES@};
+const int clang_header_includes_length{@NUM_CLANG_HEADER_INCLUDES@};

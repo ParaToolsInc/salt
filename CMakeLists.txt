@@ -99,5 +99,24 @@ include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
-configure_file(include/clang_header_includes.h.in include/clang_header_includes.h
+list(LENGTH LLVM_INCLUDE_DIRS NUM_CLANG_HEADER_INCLUDES)
+list(JOIN LLVM_INCLUDE_DIRS '", "-I' CLANG_HEADER_INCLUDES)
+set(CLANG_HEADER_INCLUDES '"-I${CLANG_HEADER_INCLUDES}"')
+message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
+message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
+configure_file(
+  "${CMAKE_SOURCE_DIR}/include/clang_header_includes.h.in" "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
   @ONLY)
+
+
+#---------------------------------
+# List the header and source files
+#---------------------------------
+set(SALT_HEADER_FILES dprint.hpp selectfile.hpp tau_datatypes.h tooling.hpp)
+list(TRANSFORM SALT_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
+list(APPEND SALT_HEADER_FILES "${CMAKE_BINARY_DIR}/include/clang_header_includes.h")
+set_source_files_properties(
+  "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
+  PROPERTIES
+  GENERATED TRUE
+)
