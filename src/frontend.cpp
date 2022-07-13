@@ -237,8 +237,6 @@ int main(int argc, const char **argv)
 
     CodeInstrumentor.run_tool();
 
-    // TODO: Handle config files
-
     CodeInstrumentor.instr_request(excludelist, false); // Emit selective instrumentation requests
 
     findFiles(OptionsParser.getSourcePathList(), CodeInstrumentor); //Locate source files and mark for instrumentation/skipping

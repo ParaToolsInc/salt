@@ -59,7 +59,6 @@ static bool inst_inline = false;
 
 class instrumentor {
 public:
-    // TODO add data from configuration files
 
     clang::tooling::ClangTool* Tool = nullptr;
     char* exec_name;
@@ -73,9 +72,6 @@ public:
 
     // Handles a list of instrumentation locations to be included (include=true) or excluded (include=false)
     void instr_request(std::list<std::string> list, bool include);
-
-    // TODO handle configuration files
-    // void configure(configuration data);
 
     void instrument_file(std::ifstream &og_file, std::ofstream &inst_file, std::string filename,
                      std::vector<inst_loc *> inst_locations, bool use_cxx_api, ryml::Tree yaml_tree);
