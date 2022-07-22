@@ -6,7 +6,23 @@ jobs:
     container:
       image: platinumcd/paratools-llvm-salt:latest
     steps:
-      - name: CI Test
+      - uses: actions/checkout@v2
+      - name: Print working directory
         run: |
+            echo "Working directory: $(pwd)"
+            echo "Working directory contents:"
+            ls -la
+      - name: Build Instrumentor
+        run: |
+            echo "Begin Configuration"
             ./configure.sh
+            echo "End Configuration"
+            echo "Begin build"
             make
+            echo "End build"
+      - name: Test Instrumentor
+        run: |
+            echo "Begin tests"
+            ./cparse-llvm tests/hello.c
+            cat hello.inst.c
+            echo "End tests"
