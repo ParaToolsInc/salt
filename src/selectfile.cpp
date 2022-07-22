@@ -1,3 +1,4 @@
+#include "instrumentor.hpp"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -5,7 +6,6 @@
 #include <cstring>
 
 #include "selectfile.hpp"
-#include "tooling.hpp"
 #include "dprint.hpp"
 
 std::list<std::string> excludelist;

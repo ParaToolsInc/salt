@@ -1,0 +1,7 @@
+Instrument: ./cparse-llvm config_tests/cuda_test.cu -- --cuda-gpu-arch=sm_80 -I$(spack location --install-dir cuda)/include -I$(spack location --install-dir llvm)/lib/clang/8.0.0/include
+
+Compile instr: nvcc cuda_test.inst.cu -lnvToolsExt 
+
+nsys start
+nsys launch a.out
+nsys analyze report1.

@@ -1,0 +1,16 @@
+# Config variables:
+#   ${full_timer_name}: "function_name [file_path {start}-{end}]"
+
+instrumentation: NVTX
+include:
+  - "\"nvToolsExt.h\""
+
+main_insert:
+  - "nvtxRangePushA(\"${full_timer_name}\");"
+
+function_begin_insert:
+  - "nvtxRangePushA(\"${full_timer_name}\");"
+
+function_end_insert:
+  - "nvtxRangePop();"
+

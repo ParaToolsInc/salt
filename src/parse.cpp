@@ -29,7 +29,7 @@ typedef struct inst_loc {
   int kind = -1;
   CXType return_type;
   const char* func_name;
-  const char* full_tau_name;
+  const char* full_timer_name;
   bool has_args = false;
 } inst_loc;
 
@@ -55,7 +55,7 @@ void dump_inst_loc(inst_loc* loc) {
   printf("\tKind:     %s\n", loc_typ_strs[loc->kind]);
   printf("\tRet type: %s\n", clang_getCString(clang_getTypeSpelling(loc->return_type)));
   printf("\tName:     %s\n", loc->func_name);
-  printf("\tTau:      %s\n", loc->full_tau_name);
+  printf("\tTimer:      %s\n", loc->full_timer_name);
   printf("\tHas args: %s\n", loc->has_args ? "Yes" : "No");
 }
 
@@ -88,7 +88,7 @@ ostream& operator<<(ostream& stream, const CXString& str)
 }
 
 // assumes funcdecl is CXCursor_FunctionDecl
-void makeFuncAndTauNames(CXCursor funcdecl, std::string& func_name, std::string& tau_name) {
+void makeFuncAndTimerNames(CXCursor funcdecl, std::string& func_name, std::string& timer_name) {
   CXSourceRange extent = clang_getCursorExtent(funcdecl);
   CXSourceLocation start_loc = clang_getRangeStart(extent);
   CXSourceLocation end_loc = clang_getRangeEnd(extent);
@@ -118,7 +118,7 @@ void makeFuncAndTauNames(CXCursor funcdecl, std::string& func_name, std::string&
     lang_string = "invalid";
   }
 
-  tau_name = sig + " " + lang_string + " [{" + current_file + "} {"
+  timer_name = sig + " " + lang_string + " [{" + current_file + "} {"
     + to_string(start_line) + "," + to_string(start_col) + "}-{"
     + to_string(end_line) + "," + to_string(end_col-1) + "}]";
 }
@@ -139,14 +139,14 @@ void handleFuncStartEnd(CXCursor c, CXCursor parent) {
   clang_getSpellingLocation(end_loc, nullptr, &end_line, &end_col, nullptr );
 
   std::string func_name;
-  std::string tau_name;
-  makeFuncAndTauNames(parent, func_name, tau_name);
+  std::string timer_name;
+  makeFuncAndTimerNames(parent, func_name, timer_name);
 
   char* func_name_c = new char[func_name.length()+1];
   std::strcpy(func_name_c, func_name.c_str());
 
-  char* tau_name_c = new char[tau_name.length()+1];
-  std::strcpy(tau_name_c, tau_name.c_str());
+  char* timer_name_c = new char[timer_name.length()+1];
+  std::strcpy(timer_name_c, timer_name.c_str());
 
   // the cols are 1-indexed, but the strings of each line are 0-indexed
   // the given start_col is the index of the open brace, so to go 1 after the char at the start
@@ -160,7 +160,7 @@ void handleFuncStartEnd(CXCursor c, CXCursor parent) {
   start->kind = BEGIN_FUNC;
   start->return_type = clang_getResultType(clang_getCursorType(parent));
   start->func_name = func_name_c;
-  start->full_tau_name = tau_name_c;
+  start->full_timer_name = timer_name_c;
   start->has_args = clang_Cursor_getNumArguments(parent) > 0;
 
   inst_locations.push_back(start);
@@ -171,7 +171,7 @@ void handleFuncStartEnd(CXCursor c, CXCursor parent) {
   end->kind = RETURN_FUNC;
   end->return_type = clang_getResultType(clang_getCursorType(parent));
   end->func_name = func_name_c;
-  end->full_tau_name = tau_name_c;
+  end->full_timer_name = timer_name_c;
   end->has_args = clang_Cursor_getNumArguments(parent) > 0;
 
   inst_locations.push_back(end);
@@ -208,14 +208,14 @@ void handleReturn(CXCursor c, CXCursor parent, CXCursor encl_function) {
   clang_getSpellingLocation(return_loc, nullptr, &ret_line, &ret_col, nullptr );
 
   std::string func_name;
-  std::string tau_name;
-  makeFuncAndTauNames(encl_function, func_name, tau_name);
+  std::string timer_name;
+  makeFuncAndTimerNames(encl_function, func_name, timer_name);
 
   char* func_name_c = new char[func_name.length()+1];
   std::strcpy(func_name_c, func_name.c_str());
 
-  char* tau_name_c = new char[tau_name.length()+1];
-  std::strcpy(tau_name_c, tau_name.c_str());
+  char* timer_name_c = new char[timer_name.length()+1];
+  std::strcpy(timer_name_c, timer_name.c_str());
 
   printf("func type %s\n", clang_getCString(clang_getTypeSpelling(clang_getCursorType(encl_function))));
   printf("returns a %s\n", clang_getCString(clang_getTypeSpelling(clang_getResultType(clang_getCursorType(encl_function)))));
@@ -227,7 +227,7 @@ void handleReturn(CXCursor c, CXCursor parent, CXCursor encl_function) {
   ret->kind = start_line == end_line ? RETURN_FUNC : MULTILINE_RETURN_FUNC;
   ret->func_name = func_name_c;
   ret->return_type = clang_getResultType(clang_getCursorType(encl_function));
-  ret->full_tau_name = tau_name_c;
+  ret->full_timer_name = timer_name_c;
   ret->has_args = clang_Cursor_getNumArguments(encl_function) > 0;
 
   inst_locations.push_back(ret);
@@ -300,7 +300,7 @@ CXChildVisitResult traverse(CXCursor c, CXCursor parent, CXClientData client_dat
 
 void make_begin_func_code(inst_loc* loc, std::string& code) {
   code += "\tTAU_PROFILE_TIMER(tautimer, \"";
-  code += loc->full_tau_name;
+  code += loc->full_timer_name;
   code += "\", \" \", ";
   code += strcmp(loc->func_name, "main") == 0 ? "TAU_DEFAULT" : "TAU_USER";
   code += ");\n";
@@ -321,7 +321,7 @@ void make_begin_func_code(inst_loc* loc, std::string& code) {
 
 void make_begin_func_code_cxx(inst_loc* loc, std::string& code) {
   code += "\tTAU_PROFILE(\"";
-  code += loc->full_tau_name;
+  code += loc->full_timer_name;
   code += "\", \" \", ";
   code += strcmp(loc->func_name, "main") == 0 ? "TAU_DEFAULT" : "TAU_USER";
   code += ");\n";

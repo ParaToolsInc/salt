@@ -1,0 +1,17 @@
+# Config variables:
+#   ${full_timer_name}: "function_name [file_path {start}-{end}]"
+
+instrumentation: Perfstubs
+include:
+  - "\"perfstubs_api/timer.h\""
+
+main_insert:
+  - "PERFSTUBS_INITIALIZE();"
+  - "PERFSTUBS_TIMER_START_FUNC(_timer);"
+
+function_begin_insert:
+  - "PERFSTUBS_TIMER_START_FUNC(_timer);"
+
+function_end_insert:
+  - "PERFSTUBS_TIMER_STOP_FUNC(_timer);"
+

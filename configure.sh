@@ -1,8 +1,10 @@
 #!/bin/bash
 
-clang_path=""
-clang_inc_path=""
-clang_lib_path=""
+#llvm_path=$(spack location --install-dir llvm)
+llvm_path=/usr/local
+clang_path="$llvm_path/bin"
+clang_inc_path="$llvm_path/include"
+clang_lib_path="$llvm_path/lib"
 clang_version=""
 
 # First, check if the clang command is in the user's path
@@ -17,7 +19,7 @@ else
     clang_path=$(dirname $(which clang))
 fi
 
-arch_dir=$(./../../../utils/archfind)
+#arch_dir=$(./../../../utils/archfind)
 prefix=`pwd`
 install_prefix=`pwd`
 
@@ -70,6 +72,10 @@ if [ "${clang_lib_path}" == "" ] ; then
     clang_lib_path=$(dirname $clang_path)/lib
 fi
 clang_version=`${clang_path}/llvm-config --version`
+llvm_libs=`${clang_path}/llvm-config --libs` 
+llvm_libs="$llvm_libs -lrt -ldl -lpthread -lm -lz -ltinfo"
+#clang_libs="-lclang -lclangFrontendTool -lclangRewriteFrontend -lclangDynamicASTMatchers -lclangFormat -lclangTooling -lclangFrontend -lclangToolingCore -lclangASTMatchers -lclangCrossTU -lclangStaticAnalyzerCore -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerFrontend -lclangARCMigrate -lclangParse -lclangDriver -lclangSerialization -lclangRewrite -lclangSema -lclangEdit -lclangIndex -lclangAnalysis -lclangAST -lclangLex -lclangBasic -lclangToolingInclusions -lclangCodeGen"
+clang_libs="-lclang -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic -lclangRewrite -lclangRewriteFrontend"
 
 echo "pdt-llvm: Found clang in $clang_path"
 echo "pdt-llvm: Setting clang include path to $clang_inc_path"
@@ -94,6 +100,8 @@ echo "ARCH=$arch_dir" >> Makefile
 echo "PREFIX=$prefix" >> Makefile
 echo "INSTALL_PREFIX=$install_prefix" >> Makefile
 echo "CXX_STD=$cxx_std" >> Makefile
+echo "LLVM_LIBS=$llvm_libs" >> Makefile
+echo "CLANG_LIBS=$clang_libs" >> Makefile
 echo "" >> Makefile
 cat makefile.base >> Makefile
 
