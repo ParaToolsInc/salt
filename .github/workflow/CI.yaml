@@ -1,0 +1,12 @@
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: platinumcd/paratools-llvm-salt:latest
+    steps:
+      - name: CI Test
+        run: |
+          ls
+          pwd
