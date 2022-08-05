@@ -8,11 +8,6 @@
 #include "selectfile.hpp"
 #include "dprint.hpp"
 
-std::list<std::string> excludelist;
-std::list<std::string> includelist;
-std::list<std::string> fileincludelist;
-std::list<std::string> fileexcludelist;
-
 void dump_list(std::list<std::string> l) {
   for (std::string s : l) {
     DPRINT("%s\n", s.c_str());
@@ -681,7 +676,7 @@ void parseError(const char *message, char *line, int lineno, int column)
 //
 // } // END void parseInstrumentationCommand(char *line, int lineno)
 
-void processInstrumentationRequests(const char *fname)
+void instrumentor::processInstrumentationRequests(const char *fname)
 {
 
   std::ifstream input(fname);

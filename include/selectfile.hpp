@@ -66,12 +66,7 @@
   pname[i] = '\0';  \
   line++; /* found closing " */
 
-extern std::list<std::string> excludelist;
-extern std::list<std::string> includelist;
-extern std::list<std::string> fileincludelist;
-extern std::list<std::string> fileexcludelist;
-
 // void parseInstrumentationCommand(char *line, int lineno);
-void processInstrumentationRequests(const char *fname);
+// void processInstrumentationRequests(const char *fname);
 
 #endif

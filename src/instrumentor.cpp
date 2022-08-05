@@ -7,7 +7,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTTypeTraits.h"
 #include "clang/AST/Type.h"
-#include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/LexicallyOrderedRecursiveASTVisitor.h"
 #include "clang/Basic/Linkage.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -31,6 +31,8 @@ using namespace clang;
 #include "clang_header_includes.h"
 
 extern const char* loc_typ_strs[NUM_LOC_TYPES];
+
+instrumentor* activeInst = nullptr;
 
 const std::string file_get_contents(FILE *fp)
 {
@@ -79,58 +81,58 @@ bool eq_inst_loc(inst_loc *first, inst_loc *second)
     return false;
 }
 
-void dump_inst_loc(inst_loc *loc)
-{
-    DPRINT("\tLine:                 %d\n", loc->line);
-    DPRINT("\tCol:                    %d\n", loc->col);
-    DPRINT("\tKind:                 %s\n", loc_typ_strs[loc->kind]);
-    DPRINT("\tRet type:         %s\n", loc->return_type);
-    DPRINT("\tName:                 %s\n", loc->func_name);
-    DPRINT("\tTimer:                    %s\n", loc->full_timer_name);
-    DPRINT("\tHas args:         %s\n", loc->has_args ? "Yes" : "No");
-    DPRINT("\tIs ret ptr:     %s\n", loc->is_return_ptr ? "Yes" : "No");
-    DPRINT("\tNeeds move:     %s\n", loc->needs_move ? "Yes" : "No");
-    DPRINT("\tSkip:                 %s\n", loc->skip ? "Yes" : "No");
-}
+// void dump_inst_loc(inst_loc *loc)
+// {
+//     DPRINT("\tLine:                 %d\n", loc->line);
+//     DPRINT("\tCol:                    %d\n", loc->col);
+//     DPRINT("\tKind:                 %s\n", loc_typ_strs[loc->kind]);
+//     DPRINT("\tRet type:         %s\n", loc->return_type);
+//     DPRINT("\tName:                 %s\n", loc->func_name);
+//     DPRINT("\tTimer:                    %s\n", loc->full_timer_name);
+//     DPRINT("\tHas args:         %s\n", loc->has_args ? "Yes" : "No");
+//     DPRINT("\tIs ret ptr:     %s\n", loc->is_return_ptr ? "Yes" : "No");
+//     DPRINT("\tNeeds move:     %s\n", loc->needs_move ? "Yes" : "No");
+//     DPRINT("\tSkip:                 %s\n", loc->skip ? "Yes" : "No");
+// }
 
-void dump_inst_loc(inst_loc *loc, int n)
-{
-    DPRINT("location %d\n", n);
-    dump_inst_loc(loc);
-}
+// void dump_inst_loc(inst_loc *loc, int n)
+// {
+//     DPRINT("location %d\n", n);
+//     dump_inst_loc(loc);
+// }
 
-void dump_inst_loc(inst_loc *loc, int n, bool (*filter)(inst_loc *))
-{
-    if (filter(loc))
-    {
-        DPRINT("location %d\n", n);
-        dump_inst_loc(loc);
-    }
-}
+// void dump_inst_loc(inst_loc *loc, int n, bool (*filter)(inst_loc *))
+// {
+//     if (filter(loc))
+//     {
+//         DPRINT("location %d\n", n);
+//         dump_inst_loc(loc);
+//     }
+// }
 
-void dump_all_locs()
-{
-    for (int i = 0; i < inst_locs.size(); i++)
-    {
-        dump_inst_loc(inst_locs[i], i);
-    }
-}
+// void dump_all_locs()
+// {
+//     for (int i = 0; i < inst_locs.size(); i++)
+//     {
+//         dump_inst_loc(inst_locs[i], i);
+//     }
+// }
 
-void dump_all_locs(std::vector<inst_loc *> locs)
-{
-    for (int i = 0; i < locs.size(); i++)
-    {
-        dump_inst_loc(locs[i], i);
-    }
-}
+// void dump_all_locs(std::vector<inst_loc *> locs)
+// {
+//     for (int i = 0; i < locs.size(); i++)
+//     {
+//         dump_inst_loc(locs[i], i);
+//     }
+// }
 
-void dump_all_locs(bool (*filter)(inst_loc *))
-{
-    for (int i = 0; i < inst_locs.size(); i++)
-    {
-        dump_inst_loc(inst_locs[i], i, filter);
-    }
-}
+// void dump_all_locs(bool (*filter)(inst_loc *))
+// {
+//     for (int i = 0; i < inst_locs.size(); i++)
+//     {
+//         dump_inst_loc(inst_locs[i], i, filter);
+//     }
+// }
 
 std::string ReplacePhrase(std::string str, std::string phrase, std::string to_replace)
 {
@@ -507,306 +509,47 @@ inline bool operator<=(const SourceLocation &LHS, const SourceLocation &RHS)
 }
 #endif
 
-class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
+class ParseSourceVisitor : public LexicallyOrderedRecursiveASTVisitor<ParseSourceVisitor>
 {
-    ASTContext *context;
     SourceManager &src_mgr;
-    FunctionDecl *encl_function;
-    std::vector<SourceRange> lambda_locs;
 
-  public:
-    explicit FindReturnVisitor(ASTContext *context, SourceManager &SM) : context(context), src_mgr(SM)
+public:
+    explicit ParseSourceVisitor(SourceManager &SM)
+        : LexicallyOrderedRecursiveASTVisitor(SM), src_mgr(SM)
     {
+        (void)src_mgr;
     }
 
-    bool VisitReturnStmt(ReturnStmt *ret)
-    {
-        for (SourceRange lambda : lambda_locs)
-        {
-#if __clang_major__ > 9
-            if (lambda.fullyContains(ret->getSourceRange()))
-            {
-#else
-            SourceLocation lambda_begin = lambda.getBegin();
-            SourceLocation lambda_end = lambda.getEnd();
-            SourceLocation ret_begin = ret->getSourceRange().getBegin();
-            SourceLocation ret_end = ret->getSourceRange().getEnd();
-            if (lambda_begin <= ret_begin && ret_end <= lambda_end)
-            {
-#endif
-                // ignore lambdas
-                return true;
-            }
-        }
-        makeRetInstLoc(ret);
+    bool VisitDecl(Decl *decl) {
+        decl->dump();
         return true;
     }
 
-    bool VisitLambdaExpr(LambdaExpr *lambda)
-    {
-        lambda_locs.push_back(lambda->getSourceRange());
-        return true;
-    }
-
-  private:
-    void makeRetInstLoc(ReturnStmt *retstmt)
-    {
-        SourceRange range = retstmt->getSourceRange();
-
-        FullSourceLoc start_loc = context->getFullLoc(range.getBegin());
-        FullSourceLoc end_loc = context->getFullLoc(range.getEnd());
-
-        unsigned int start_line = start_loc.getSpellingLineNumber();
-        unsigned int start_col = start_loc.getSpellingColumnNumber();
-        unsigned int end_line = end_loc.getSpellingLineNumber();
-        // unused
-        // unsigned int end_col = end_loc.getSpellingColumnNumber();
-
-        std::string func_name;
-        std::string timer_name;
-        makeFuncAndTimerNames(encl_function, context, src_mgr, func_name, timer_name);
-
-        char *func_name_c = new char[func_name.length() + 1];
-        std::strcpy(func_name_c, func_name.c_str());
-
-        char *timer_name_c = new char[timer_name.length() + 1];
-        std::strcpy(timer_name_c, timer_name.c_str());
-
-        std::string ret_name = encl_function->getReturnType().getAsString();
-        if (encl_function->getReturnType().getTypePtr()->isBooleanType() && ret_name.find("_Bool") != std::string::npos)
-        {
-            ret_name.replace(ret_name.find("_Bool"), 5, "bool");
-        }
-        if (ret_name.substr(0, 5).find("class") != std::string::npos)
-        {
-            ret_name = ret_name.substr(6); // if it starts with "class", chop that off
-        }
-        if (ret_name.substr(0, 11).find("const class") != std::string::npos)
-        {
-            ret_name = ret_name.erase(6, 6); // if it starts with "class", chop that off
-        }
-
-        bool needs_move = false;
-        if (encl_function->getReturnType()->isClassType())
-        {
-            CXXRecordDecl *decl = encl_function->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ > 10
-            if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
-            {
-#else // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
-            bool DefaultedCopyAssignmentIsDeleted = false;
-            if (const auto *Field = dyn_cast<FieldDecl>(decl))
-            {
-                QualType T = context->getBaseElementType(Field->getType());
-                if (T->isReferenceType())
-                {
-                    DefaultedCopyAssignmentIsDeleted = true;
-                }
-                if (const auto *RecordTy = T->getAs<RecordType>())
-                {
-                    auto *FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
-                    if (FieldRec->getDefinition())
-                    {
-                        if (decl->isUnion())
-                        {
-                            if (FieldRec->hasNonTrivialCopyAssignment())
-                            {
-                                DefaultedCopyAssignmentIsDeleted = true;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (T.isConstQualified())
-                    {
-                        DefaultedCopyAssignmentIsDeleted = true;
-                    }
-                }
-            }
-            if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
-                  decl->hasTrivialCopyAssignment()))
-            {
-#endif
-                needs_move = true;
-            }
-        }
-
-        char *ret_name_c = new char[ret_name.length() + 1];
-        std::strcpy(ret_name_c, ret_name.c_str());
-
-        inst_loc *ret = new inst_loc;
-        ret->line = start_line;
-        ret->col = start_col - 1;
-        ret->kind = start_line == end_line ? RETURN_FUNC : MULTILINE_RETURN_FUNC;
-        ret->func_name = func_name_c;
-        ret->return_type = ret_name_c;
-        ret->full_timer_name = timer_name_c;
-        ret->has_args = encl_function->getNumParams() > 0;
-        ret->is_return_ptr = encl_function->getReturnType()->isPointerType();
-        ret->needs_move = needs_move;
-
-        inst_locs.push_back(ret);
-
-        // llvm::outs() << "\tFound return at " << start_line << ":" << start_col << "\n";
-    }
-
-    friend class FindFunctionVisitor;
+    // bool VisitFunctionDecl(FunctionDecl *func)
+    // {
+    //     // if (func->isInlined()) {
+    //     //     printf("Function %s is inline\n", func->getQualifiedNameAsString().c_str());
+    //     // }
+    //     // short circuit on hasBody() first to protect check_func_against_list (and makeFuncInstLoc) from segfaults
+    //     if (func->hasBody() &&
+    //         (!func->isInlined() || inst_inline || check_func_against_list(includelist, func, context, src_mgr)))
+    //     { //
+    //         makeFuncInstLoc(func);
+    //         return_visitor.encl_function = func;
+    //         return_visitor.TraverseDecl(func);
+    //     }
+    //     return true;
+    // }
 };
 
-class FindFunctionVisitor : public RecursiveASTVisitor<FindFunctionVisitor>
+class ParseSourceConsumer : public clang::ASTConsumer
 {
-    ASTContext *context;
+    ParseSourceVisitor file_visitor;
     SourceManager &src_mgr;
-    FindReturnVisitor return_visitor;
+    instrumentor* instr;
 
   public:
-    explicit FindFunctionVisitor(ASTContext *context, SourceManager &SM)
-        : context(context), src_mgr(SM), return_visitor(context, SM)
-    {
-    }
-
-    bool VisitFunctionDecl(FunctionDecl *func)
-    {
-        // if (func->isInlined()) {
-        //     printf("Function %s is inline\n", func->getQualifiedNameAsString().c_str());
-        // }
-        // short circuit on hasBody() first to protect check_func_against_list (and makeFuncInstLoc) from segfaults
-        if (func->hasBody() &&
-            (!func->isInlined() || inst_inline || check_func_against_list(includelist, func, context, src_mgr)))
-        { //
-            makeFuncInstLoc(func);
-            return_visitor.encl_function = func;
-            return_visitor.TraverseDecl(func);
-        }
-        return true;
-    }
-
-  private:
-    void makeFuncInstLoc(FunctionDecl *func)
-    {
-        Stmt *func_body = func->getBody();
-        SourceRange range = func_body->getSourceRange();
-
-        FullSourceLoc start_loc = context->getFullLoc(range.getBegin());
-        FullSourceLoc end_loc = context->getFullLoc(range.getEnd());
-
-        unsigned int start_line = start_loc.getSpellingLineNumber();
-        unsigned int start_col = start_loc.getSpellingColumnNumber();
-        unsigned int end_line = end_loc.getSpellingLineNumber();
-        unsigned int end_col = end_loc.getSpellingColumnNumber();
-
-        std::string func_name;
-        std::string timer_name;
-
-        makeFuncAndTimerNames(func, context, src_mgr, func_name, timer_name);
-
-        char *func_name_c = new char[func_name.length() + 1];
-        std::strcpy(func_name_c, func_name.c_str());
-
-        char *timer_name_c = new char[timer_name.length() + 1];
-        std::strcpy(timer_name_c, timer_name.c_str());
-
-        std::string ret_name = func->getReturnType().getAsString();
-        // why
-        if (func->getReturnType().getTypePtr()->isBooleanType() && ret_name.find("_Bool") != std::string::npos)
-        {
-            ret_name.replace(ret_name.find("_Bool"), 5, "bool ");
-        }
-        if (ret_name.substr(0, 5).find("class") != std::string::npos)
-        {
-            ret_name = ret_name.substr(6); // if it starts with "class", chop that off
-        }
-        if (ret_name.substr(0, 11).find("const class") != std::string::npos)
-        {
-            ret_name = ret_name.erase(6, 6); // if it starts with "class", chop that off
-        }
-        char *ret_name_c = new char[ret_name.length() + 1];
-        std::strcpy(ret_name_c, ret_name.c_str());
-
-        bool needs_move = false;
-        if (func->getReturnType()->isClassType())
-        {
-            CXXRecordDecl *decl = func->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ > 10
-            if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
-            {
-#else // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
-            bool DefaultedCopyAssignmentIsDeleted = false;
-            if (const auto *Field = dyn_cast<FieldDecl>(decl))
-            {
-                QualType T = context->getBaseElementType(Field->getType());
-                if (T->isReferenceType())
-                {
-                    DefaultedCopyAssignmentIsDeleted = true;
-                }
-                if (const auto *RecordTy = T->getAs<RecordType>())
-                {
-                    auto *FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
-                    if (FieldRec->getDefinition())
-                    {
-                        if (decl->isUnion())
-                        {
-                            if (FieldRec->hasNonTrivialCopyAssignment())
-                            {
-                                DefaultedCopyAssignmentIsDeleted = true;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (T.isConstQualified())
-                    {
-                        DefaultedCopyAssignmentIsDeleted = true;
-                    }
-                }
-            }
-            if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
-                  decl->hasTrivialCopyAssignment()))
-            {
-#endif
-                needs_move = true;
-            }
-        }
-
-        inst_loc *start = new inst_loc;
-        start->line = start_line;
-        start->col = start_col;
-        start->kind = BEGIN_FUNC;
-        start->return_type = ret_name_c;
-        start->func_name = func_name_c;
-        start->full_timer_name = timer_name_c;
-        start->has_args = func->getNumParams() > 0;
-        start->is_return_ptr = func->getReturnType()->isPointerType();
-        start->needs_move = needs_move;
-
-        inst_locs.push_back(start);
-
-        inst_loc *end = new inst_loc;
-        end->line = end_line;
-        end->col = end_col - 1;
-        end->kind = RETURN_FUNC;
-        end->return_type = ret_name_c;
-        end->func_name = func_name_c;
-        end->full_timer_name = timer_name_c;
-        end->has_args = func->getNumParams() > 0;
-        end->is_return_ptr = func->getReturnType()->isPointerType();
-        end->needs_move = needs_move;
-
-        inst_locs.push_back(end);
-
-        // llvm::outs() << "Found function " << timer_name << "\n";
-    }
-};
-
-class FindFunctionConsumer : public clang::ASTConsumer
-{
-    FindFunctionVisitor func_visitor;
-    SourceManager &src_mgr;
-
-  public:
-    FindFunctionConsumer(ASTContext *context, SourceManager &SM) : func_visitor(context, SM), src_mgr(SM)
+    ParseSourceConsumer(ASTContext *context, SourceManager &SM) : file_visitor(SM), src_mgr(SM), instr(activeInst)
     {
     }
 
@@ -825,10 +568,10 @@ class FindFunctionConsumer : public clang::ASTConsumer
             }
             // if file include list exists: *only include those*
             // except for things in the exclude list
-            if (!fileincludelist.empty())
+            if (!instr->fileincludelist.empty())
             {
-                if (check_file_against_list(fileincludelist, src_mgr.getFilename(srcloc).str()) &&
-                    !check_file_against_list(fileexcludelist, src_mgr.getFilename(srcloc).str()))
+                if (check_file_against_list(instr->fileincludelist, src_mgr.getFilename(srcloc).str()) &&
+                    !check_file_against_list(instr->fileexcludelist, src_mgr.getFilename(srcloc).str()))
                 {
                     // printf("adding1 %s\n", src_mgr.getFilename(srcloc).str().c_str());
                     if (!src_mgr.getFilename(srcloc).str().empty() &&
@@ -837,13 +580,13 @@ class FindFunctionConsumer : public clang::ASTConsumer
                     {
                         files_to_go.push_back(src_mgr.getFilename(srcloc).str());
                     }
-                    func_visitor.TraverseDecl(decl);
+                    file_visitor.TraverseDecl(decl);
                 }
             }
             // if file include list does not exist, just check against exclude list
             else
             {
-                if (!check_file_against_list(fileexcludelist, src_mgr.getFilename(srcloc).str()))
+                if (!check_file_against_list(instr->fileexcludelist, src_mgr.getFilename(srcloc).str()))
                 {
                     // decl->dump();
                     // printf("adding2 %s\n", src_mgr.getFilename(srcloc).str().c_str());
@@ -854,68 +597,113 @@ class FindFunctionConsumer : public clang::ASTConsumer
                     {
                         files_to_go.push_back(src_mgr.getFilename(srcloc).str());
                     }
-                    func_visitor.TraverseDecl(decl);
+                    file_visitor.TraverseDecl(decl);
                 }
             }
         }
     }
 };
 
-class FindFunctionAction : public ASTFrontendAction
+class ParseSourceAction : public ASTFrontendAction
 {
   public:
     virtual std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &Compiler, llvm::StringRef InFile)
     {
-        return std::make_unique<FindFunctionConsumer>(&Compiler.getASTContext(), Compiler.getSourceManager());
+        return std::make_unique<ParseSourceConsumer>(&Compiler.getASTContext(), Compiler.getSourceManager());
     }
 };
 
-instrumentor::instrumentor() 
-{
-    // Constructor currently does not need to do anything
+
+
+void instrumentor::parse_files(const clang::tooling::CompilationDatabase &Compilations, llvm::ArrayRef< std::string > SourcePaths) {
+    std::map<std::string, file*> fileMap;
+    activeInst = this;
+    auto tool = new tooling::ClangTool(Compilations, SourcePaths);
+    tool->run(tooling::newFrontendActionFactory<ParseSourceAction>().get());
+}
+
+
+function::function(std::string name, std::string text, std::vector<inst_loc*> inst_locations) {
+    this->name = name;
+    this->text = text;
+    this->inst_locations = inst_locations;
+}
+
+void file::emit(std::string fname) {
+    std::ofstream inst_file;
+    inst_file.open(fname);
+
+    
+    for (fileElement& fc: elements) {
+        if (fc.tag == fileElement::FUNC) {
+            inst_file << fc.f->text;
+        } else {
+            inst_file << *fc.s;
+        }
+    }
+
+    inst_file.close();
 }
 
 void instrumentor::set_exec_name(const char* name)
 {
     exec_name = strdup(name);
-}
-
-void instrumentor::run_tool()
-{
-    Tool->run(tooling::newFrontendActionFactory<FindFunctionAction>().get());
-}
-
-void instrumentor::instr_request(std::list<std::string> list, bool include) 
-{
-    for (inst_loc *loc : inst_locs)
+    if (strstr(exec_name, "cxxparse") != nullptr)
     {
-        if (check_loc_against_list(list, loc))
-        {
-            loc->skip = !include;
+        use_cxx_api = true;
+        DPRINT("%s: Forcing TAU CXX API\n", exec_name);
+        fflush(stdout);
+    }
+}
+
+void instrumentor::apply_selective_instrumentation() {
+    for (auto file: files) {
+        for (auto &fnc: file->elements) {
+            if (fnc.tag == fileElement::TEXT) continue;
+            for (inst_loc *loc : fnc.f->inst_locations)
+            {
+                if (check_loc_against_list(excludelist, loc))
+                {
+                    loc->skip = false;
+                }
+            }
         }
     }
 }
 
-void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_file, std::string filename,
-                     std::vector<inst_loc *> inst_locations, bool use_cxx_api, ryml::Tree yaml_tree)
-{
+void instrumentor::configure(const char* configuration_file) {
+    // Read config.yaml      
+    ryml::Tree yaml_tree;
+    if (FILE *config_file = fopen(configuration_file, "r"))
+    {
+        std::string contents = file_get_contents(config_file); 
+        yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(contents));
+        ryml::emit(yaml_tree, yaml_tree.root_id(), config_file);
+        fclose(config_file);
+    }
+    else
+    {
+        llvm::outs() << "No config file found\n";
+        exit(1);
+    }
+}
+
+std::string instrumentor::instrument_func(function& f) {
     std::string line;
+
     int lineno = 0;
 
-    auto inst_loc_iter = inst_locations.begin();
+    std::istringstream og_func(f.text);
+    std::stringstream inst_func;
 
-    for (ryml::NodeRef const& child : yaml_tree["include"].children()) {
-        inst_file << "#include " << child.val() << "\n";
-    }
+    auto inst_loc_iter = f.inst_locations.begin();
 
-    inst_file << "#line 1 \"" << filename << "\"\n";
-
-    while (getline(og_file, line))
+    while (getline(og_func, line))
     {
         lineno++;
         // short circuit if we run out of inst locations to avoid segfaults :)
         // need the if and the while because sometimes 2+ inst locations are on the same line
-        if (inst_loc_iter != inst_locations.end())
+        if (inst_loc_iter != f.inst_locations.end())
         {
             inst_loc *curr_inst_loc = *inst_loc_iter;
             if (lineno == curr_inst_loc->line)
@@ -924,7 +712,7 @@ void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_f
                 int num_inst_locs_this_line = 0;
                 std::string start = line.substr(0, curr_inst_loc->col);
                 std::string end;
-                while (inst_loc_iter != inst_locations.end() && lineno == curr_inst_loc->line)
+                while (inst_loc_iter != f.inst_locations.end() && lineno == curr_inst_loc->line)
                 {
                     if (curr_inst_loc->col < line.size())
                     {
@@ -936,13 +724,13 @@ void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_f
                     }
                     if (num_inst_locs_this_line == 0)
                     {
-                        inst_file << start;
+                        inst_func << start;
                     }
                     std::string inst_code = "";
                     switch (curr_inst_loc->kind)
                     {
                     case BEGIN_FUNC:
-                        inst_file << "\n#line " << lineno << "\n";
+                        inst_func << "\n#line " << lineno << "\n";
                         if (use_cxx_api)
                         {
                             make_begin_func_code_cxx(curr_inst_loc, inst_code);
@@ -951,16 +739,16 @@ void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_f
                         {
                             make_begin_func_code(curr_inst_loc, inst_code, yaml_tree);
                         }
-                        inst_file << inst_code;
-                        inst_file << "#line " << lineno << "\n";
+                        inst_func << inst_code;
+                        inst_func << "#line " << lineno << "\n";
                         break;
                     case RETURN_FUNC:
                         if (!use_cxx_api)
                         {
-                            inst_file << "\n#line " << lineno << "\n";
+                            inst_func << "\n#line " << lineno << "\n";
                             make_end_func_code(curr_inst_loc, inst_code, line, yaml_tree);
-                            inst_file << inst_code;
-                            inst_file << "#line " << lineno << "\n";
+                            inst_func << inst_code;
+                            inst_func << "#line " << lineno << "\n";
                             if (line.find("return", curr_inst_loc->col) != std::string::npos &&
                                 line.find(";", line.find("return", curr_inst_loc->col)) != std::string::npos)
                             {
@@ -971,19 +759,19 @@ void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_f
                     case MULTILINE_RETURN_FUNC:
                         if (!use_cxx_api)
                         {
-                            inst_file << "\n#line " << lineno << "\n";
+                            inst_func << "\n#line " << lineno << "\n";
                             // join all the lines together into one so make_end_func_code can actually know what's
                             // happening
                             while (line.find(";") == std::string::npos)
                             {
                                 std::string templine;
-                                getline(og_file, templine);
+                                getline(og_func, templine);
                                 line += templine;
                                 lineno++;
                             }
                             make_end_func_code(curr_inst_loc, inst_code, line, yaml_tree);
-                            inst_file << inst_code;
-                            inst_file << "#line " << lineno << "\n";
+                            inst_func << inst_code;
+                            inst_func << "#line " << lineno << "\n";
                             if (line.find("return", curr_inst_loc->col) != std::string::npos &&
                                 line.find(";", line.find("return", curr_inst_loc->col)) != std::string::npos)
                             {
@@ -999,99 +787,51 @@ void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_f
                     num_inst_locs_this_line++;
                 }
 
-                inst_file << end << "\n";
+                inst_func << end << "\n";
             }
             else
             {
-                inst_file << line << "\n";
+                inst_func << line << "\n";
             }
         }
         else
         {
-            inst_file << line << "\n";
+            inst_func << line << "\n";
+        }
+    }
+
+    return inst_func.str();
+
+}
+
+void instrumentor::instrument_file(file* f) {
+    for (fileElement& fc: f->elements) {
+        if (fc.tag == fileElement::FUNC) {
+            fc.f->text = instrument_func(*fc.f);
         }
     }
 }
 
-void instrumentor::instrument()
-{
-    // printf("size %zu\n", files_to_go.size());
-    // for (std::string fname : files_to_go) {
-    //     printf("Instrumenting %s\n", fname.c_str());
-    // }
-    
-    for (std::string fname : files_to_go)
-    {
-        // if this isn't the file we passed in, continue
-        // basically, skip all headers.
-        std::string short_name;
-        auto location = fname.find_last_of("/\\");
-        if (location != std::string::npos)
-        {
-            short_name = fname.substr(location + 1);
-        }
-        else
-        {
-            short_name = fname;
-        }
-        if (file_set.count(short_name) == 0)
-        {
-            continue;
-        }
-        DPRINT("Instrumenting %s\n", fname.c_str());
-        std::vector<inst_loc *> inst_locations;
+void instrumentor::instrument() {
+    for (auto f: files) {
 
-        DPRINT0("filtering locations for file\n");
-        // filter on fname
-        for (inst_loc *loc : inst_locs)
-        {
-            std::string timer_name = std::string(loc->full_timer_name);
-            // grab contents of first set of curly braces, which is filename
-            std::string loc_fname = timer_name.substr(timer_name.find_first_of("{") + 1,
-                                                    timer_name.find_first_of("}") - timer_name.find_first_of("{") - 1);
-            // printf("loc file %s\n", loc_fname.c_str());
-            // printf("cur file %s\n", fname.c_str());
-            if (loc_fname.find(fname) != std::string::npos || fname.find(loc_fname) != std::string::npos)
-            {
-                inst_locations.push_back(loc);
-            }
-        }
+        instrument_file(f);
 
-        // inst_locs.begin(), inst_locs.end(), inst_locations.begin(),
-        // [&](inst_loc* loc) {
-        //     std::string timer_name = std::string(loc->full_timer_name);
-        //     // grab contents of first set of curly braces, which is filename
-        //     std::string loc_fname = timer_name.substr(timer_name.find_first_of("{")+1, timer_name.find_first_of("}") -
-        //     timer_name.find_first_of("{")-1); printf("loc file %s\n", loc_fname.c_str()); printf("cur file %s\n",
-        //     fname.c_str()); return trim(loc_fname) == trim(fname);
-        // });
-        // sort by line numbers then cols (then loc type) so looping goes well
-        std::sort(inst_locations.begin(), inst_locations.end(), comp_inst_loc);
-        // unique again just in case
-        auto new_end3 = std::unique(inst_locations.begin(), inst_locations.end(), eq_inst_loc);
-        inst_locations.erase(new_end3, inst_locations.end());
-
-        // if (fname.find("WaveFunction.cpp") != std::string::npos) {
-        // dump_all_locs(inst_locations);
-        // }
-
-        std::ifstream og_file;
-        std::ofstream inst_file;
-        std::string newname = fname;
+        std::string newname = f->name;
         if (!outputfile.empty())
         {
             newname = outputfile;
         }
         else
         {
-            auto location = fname.find_last_of("/\\");
+            auto location = f->name.find_last_of("/\\");
             if (location != std::string::npos)
             {
-                newname = fname.substr(location + 1);
+                newname = f->name.substr(location + 1);
             }
             else
             {
-                newname = fname;
+                newname = f->name;
             }
             location = newname.find_last_of(".");
             if (location != std::string::npos)
@@ -1105,61 +845,16 @@ void instrumentor::instrument()
         }
         DPRINT("new filename (inst): %s\n", newname.c_str());
 
-        inst_file.open(newname);
-        og_file.open(fname);
-
-        // check for cxxparse executable name. If so, force cxx api usage
-        if (strstr(exec_name, "cxxparse") != nullptr)
-        {
-            use_cxx_api = true;
-            DPRINT("%s: Forcing TAU CXX API\n", exec_name);
-            fflush(stdout);
+        std::stringstream includes;
+        for (ryml::NodeRef const& child : yaml_tree["include"].children()) {
+            includes << "#include " << child.val() << "\n";
         }
 
-        // Read config.yaml
-        mkdir("config_files", 0777);        
-        ryml::Tree yaml_tree;
-        if (FILE *config_file = fopen("config_files/config.yaml", "r"))
-        {
-            std::string contents = file_get_contents(config_file); 
-            yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(contents));
-            ryml::emit(yaml_tree, yaml_tree.root_id(), config_file);
-            fclose(config_file);
-        }
-        else
-        {
-            llvm::outs() << "No config file found\n";
-            remove(newname.c_str());
-            exit(1);
-        }
+        includes << "#line 1 \"" << newname << "\"\n";
 
-        llvm::outs() << "Instrumentation: " << yaml_tree["instrumentation"].val() << "\n"; 
-        instrument_file(og_file, inst_file, fname, inst_locations, use_cxx_api, yaml_tree);
-        og_file.close();
-        inst_file.close();
-    }
+        f->elements.insert(f->elements.begin(), fileElement(new std::string(includes.str())));
 
-    for (std::string fname : files_skipped)
-    {
-        std::ifstream og_file;
-        std::ofstream inst_file;
-        std::string newname = fname;
-        if (!outputfile.empty())
-        {
-            newname = outputfile;
-        }
-        else
-        {
-            newname.insert(newname.find_last_of("."), ".inst");
-        }
-        DPRINT("new filename (skip): %s\n", newname.c_str());
 
-        inst_file.open(newname);
-        og_file.open(fname);
-
-        inst_file << og_file.rdbuf();
-
-        og_file.close();
-        inst_file.close();
+        f->emit(newname);
     }
 }
