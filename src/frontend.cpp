@@ -206,46 +206,7 @@ char **addHeadersToCommand(int *argc, const char **argv)
 //     files_to_go.erase(new_end2, files_to_go.end());
 // }
 
-// int main(int argc, const char **argv)
-// {
-//     int new_argc = argc;
-//     char **new_argv = addHeadersToCommand(&new_argc, argv);
-
-//     //Get source paths
-//     auto ExpectedParser =
-//         tooling::CommonOptionsParser::create(new_argc, (const char **)new_argv, MyToolCategory, llvm::cl::OneOrMore,
-//                                              "Tool for adding TAU instrumentation to source files.\nNote that this "
-//                                              "will only instrument the first source file given.");
-
-//     if (!ExpectedParser)
-//     {
-//         llvm::errs() << ExpectedParser.takeError();
-//         return 1;
-//     }
-
-//     tooling::CommonOptionsParser &OptionsParser = ExpectedParser.get();
-//     instrumentor CodeInstrumentor;
-//     CodeInstrumentor.Tool = new tooling::ClangTool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
-//     CodeInstrumentor.set_exec_name(argv[0]);
-
-//     inst_inline = do_inline;
-
-//     if (!selectfile.empty())
-//     {
-//         processInstrumentationRequests(selectfile.c_str());
-//     }
-
-//     CodeInstrumentor.run_tool();
-
-//     CodeInstrumentor.instr_request(excludelist, false); // Emit selective instrumentation requests
-
-//     findFiles(OptionsParser.getSourcePathList(), CodeInstrumentor); //Locate source files and mark for instrumentation/skipping
-
-//     CodeInstrumentor.instrument();
-    
-// }
-
-
+using namespace std;
 
 int main(int argc, const char **argv)
 {
@@ -267,11 +228,12 @@ int main(int argc, const char **argv)
     tooling::CommonOptionsParser &OptionsParser = ExpectedParser.get();
     instrumentor CodeInstrumentor;
 
+
     // findFiles(OptionsParser.getSourcePathList(), CodeInstrumentor); //Locate source files and mark for instrumentation/skipping
 
     CodeInstrumentor.set_exec_name(argv[0]);
 
-    inst_inline = do_inline;
+    CodeInstrumentor.inst_inline = do_inline;
     
     CodeInstrumentor.parse_files(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
 
@@ -283,7 +245,7 @@ int main(int argc, const char **argv)
 
     CodeInstrumentor.apply_selective_instrumentation(); // Emit selective instrumentation requests
 
-    // findFiles(OptionsParser.getSourcePathList(), CodeInstrumentor);
+    // CodeInstrumentor.findFiles(OptionsParser.getSourcePathList());
 
     CodeInstrumentor.instrument();
     

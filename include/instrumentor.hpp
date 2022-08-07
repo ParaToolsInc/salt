@@ -52,34 +52,6 @@ bool comp_inst_loc(inst_loc *first, inst_loc *second); // only works for inst_lo
 bool eq_inst_loc(inst_loc *first, inst_loc *second);
 bool check_file_against_list(std::list<std::string> list, std::string fname);
 
-// static std::vector<inst_loc*> inst_locs;
-static std::vector<std::string> files_to_go;
-static std::vector<std::string> files_skipped;
-static bool inst_inline = false;
-
-// class instrumentor {
-// public:
-
-//     clang::tooling::ClangTool* Tool = nullptr;
-//     char* exec_name;
-//     std::set<std::string> file_set;
-
-//     instrumentor();
-
-//     void set_exec_name(const char* name);
-
-//     void run_tool();
-
-//     // Handles a list of instrumentation locations to be included (include=true) or excluded (include=false)
-//     void instr_request(std::list<std::string> list, bool include);
-
-//     void instrument_file(std::ifstream &og_file, std::ofstream &inst_file, std::string filename,
-//                      std::vector<inst_loc *> inst_locations, bool use_cxx_api, ryml::Tree yaml_tree);
-
-//     void instrument();
-// };
-
-
 class function {
 public:
     std::string name; // metadata etc..
@@ -88,7 +60,11 @@ public:
 
     std::vector<inst_loc*> inst_locations;
 
+    unsigned int baseLineNo;
+
     function(std::string nm, std::string text, std::vector<inst_loc*>);
+
+    function();
 };
 
 struct fileElement {
@@ -125,6 +101,11 @@ public:
 
     bool use_cxx_api = false;
 
+
+    std::vector<std::string> files_to_go;
+    std::vector<std::string> files_skipped;
+    bool inst_inline = false;
+
     ryml::Tree yaml_tree;
     std::list<std::string> excludelist;
     std::list<std::string> includelist;
@@ -133,10 +114,12 @@ public:
 
     std::set<std::string> file_set;
 
-    std::vector<file*> files;
+    std::map<std::string, file*> fileMap;
     char* exec_name;
 
     void parse_files(const clang::tooling::CompilationDatabase &Compilations, llvm::ArrayRef< std::string > SourcePaths);
+
+    void findFiles(const std::vector<std::string>& files);
 
     void processInstrumentationRequests(const char *fname); // Configuration file and selective instrumentation are specific to the instrumentor object
 
