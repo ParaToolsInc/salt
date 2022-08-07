@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #llvm_path=$(spack location --install-dir llvm)
-llvm_path=$LLVM_DOE_ROOT
+llvm_path=/usr/local
 clang_path="$llvm_path/bin"
 clang_inc_path="$llvm_path/include"
 clang_lib_path="$llvm_path/lib"
