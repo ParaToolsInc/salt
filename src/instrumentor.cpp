@@ -110,14 +110,6 @@ void dump_inst_loc(inst_loc *loc, int n, bool (*filter)(inst_loc *))
     }
 }
 
-// void dump_all_locs()
-// {
-//     for (int i = 0; i < inst_locs.size(); i++)
-//     {
-//         dump_inst_loc(inst_locs[i], i);
-//     }
-// }
-
 void dump_all_locs(std::vector<inst_loc *> locs)
 {
     for (int i = 0; i < locs.size(); i++)
@@ -125,14 +117,6 @@ void dump_all_locs(std::vector<inst_loc *> locs)
         dump_inst_loc(locs[i], i);
     }
 }
-
-// void dump_all_locs(bool (*filter)(inst_loc *))
-// {
-//     for (int i = 0; i < inst_locs.size(); i++)
-//     {
-//         dump_inst_loc(inst_locs[i], i, filter);
-//     }
-// }
 
 std::string ReplacePhrase(std::string str, std::string phrase, std::string to_replace)
 {
@@ -691,13 +675,17 @@ public:
 
     bool VisitDecl(Decl *decl) {
         if (!decl->getDeclContext()->isFunctionOrMethod()) {
-            // std::cout << decl2str(decl) << std::endl;
             std::string filename = src_mgr.getFilename(decl->getLocation()).str();
             if (instr->fileMap.count(filename) == 0) {
                 instr->fileMap[filename] = new file;
                 instr->fileMap[filename]->name = filename;
             }
-            instr->fileMap[filename]->elements.push_back(fileElement(new std::string(decl2str(decl))));
+            SourceRange range = decl->getSourceRange();
+            instr->fileMap[filename]->elements.push_back(fileElement(new std::string(decl2str(decl)), 
+                context->getFullLoc(range.getBegin()).getSpellingLineNumber(),
+                context->getFullLoc(range.getBegin()).getSpellingColumnNumber(),
+                context->getFullLoc(range.getEnd()).getSpellingLineNumber(),
+                context->getFullLoc(range.getEnd()).getSpellingColumnNumber()));
         }
         return true;
     }
@@ -741,7 +729,6 @@ private:
         unsigned int start_col = start_loc.getSpellingColumnNumber();
         unsigned int end_line = end_loc.getSpellingLineNumber();
         unsigned int end_col = end_loc.getSpellingColumnNumber();
-        fobj->baseLineNo = start_line;
 
         std::string func_name;
         std::string timer_name;
@@ -923,10 +910,57 @@ class ParseSourceAction : public ASTFrontendAction
     }
 };
 
+void fill_file(std::string name, file* f) {
+    unsigned line = 1;
+    unsigned col = 1;
+    std::ifstream file(name);
+    auto it = f->elements.begin();
+    int num_elements = f->elements.size();
+    int nInserted = 0;
+    for (int ns = 0; ns < num_elements; ++ns) {
+        std::string elm = "";
+        std::string nl;
+        for (; line < it->start_line; ++line) {
+            getline(file, nl);
+            elm += nl;
+            elm += "\n";
+        }
+        nl.resize(it->start_col - 1, ' ');
+        file.read(&nl[0], it->start_col - 1);
+        elm += nl;
+        if (!elm.empty()) {
+            f->elements.insert(it, fileElement(new std::string(&elm[0]), line, col, it->start_line, it->start_col));
+            ++nInserted;
+            it = f->elements.begin()+(ns+nInserted);
+        }
+
+        std::string throwaway;
+        for (; line < it->end_line; ++line) {
+            getline(file, throwaway);
+        }
+        throwaway.resize(it->end_col, ' ');;
+        file.read(&throwaway[0], it->end_col);
+        col = it->end_col;
+        ++it;
+    }
+
+    std::string elm = "";
+    while (!file.eof()) {
+        std::string nl;
+        getline(file, nl);
+        elm += nl;
+        elm += "\n";
+    }
+    if (!elm.empty()) f->elements.insert(f->elements.end(), fileElement(new std::string(elm), 0,0,0,0));
+}
+
 void instrumentor::parse_files(const clang::tooling::CompilationDatabase &Compilations, llvm::ArrayRef< std::string > SourcePaths) {
     activeInst = this;
     auto tool = new tooling::ClangTool(Compilations, SourcePaths);
     tool->run(tooling::newFrontendActionFactory<ParseSourceAction>().get());
+    for (const auto & entry: fileMap) {
+        fill_file(entry.first,entry.second);
+    }
 }
 
 
@@ -998,15 +1032,12 @@ void instrumentor::configure(const char* configuration_file) {
     }
 }
 
-std::string instrumentor::instrument_func(function& f) {
+std::string instrumentor::instrument_func(function& f, int lineno) {
             
     std::string line;
 
-    int lineno = f.baseLineNo;
-
     std::istringstream og_func(f.text);
     std::stringstream inst_func;
-    inst_func << "\n";
 
     auto inst_loc_iter = f.inst_locations.begin();
 
@@ -1120,7 +1151,7 @@ std::string instrumentor::instrument_func(function& f) {
 void instrumentor::instrument_file(file* f) {
     for (fileElement& fc: f->elements) {
         if (fc.tag == fileElement::FUNC) {
-            fc.f->text = instrument_func(*fc.f);
+            fc.f->text = instrument_func(*fc.f, (int) fc.start_line);
         }
     }
 }
@@ -1166,7 +1197,7 @@ void instrumentor::instrument() {
 
         includes << "#line 1 \"" << f->name << "\"\n";
 
-        f->elements.insert(f->elements.begin(), fileElement(new std::string(includes.str())));
+        f->elements.insert(f->elements.begin(), fileElement(new std::string(includes.str()), 0,0,0,0));
 
 
         f->emit(newname);

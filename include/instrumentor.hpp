@@ -70,18 +70,26 @@ public:
 struct fileElement {
 
     enum{TEXT, FUNC} tag;
+
+    unsigned start_line;
+    unsigned start_col;
+    unsigned end_line;
+    unsigned end_col;
+
     union
     {
         std::string* s;
         function* f;
     };
 
-    fileElement(std::string* txt) {
+    fileElement(std::string* txt, unsigned s_line, unsigned s_col, unsigned e_line, unsigned e_col)
+        : start_line(s_line), start_col(s_col), end_line(e_line), end_col(e_col) {
         tag = TEXT;
         s = txt;
     }
 
-    fileElement(function* fnc) {
+    fileElement(function* fnc, unsigned s_line, unsigned s_col, unsigned e_line, unsigned e_col)
+        : start_line(s_line), start_col(s_col), end_line(e_line), end_col(e_col) {
         tag = FUNC;
         f = fnc;
     }
@@ -129,7 +137,7 @@ public:
     
     void configure(const char* configuration_file);
 
-    std::string instrument_func(function& f);
+    std::string instrument_func(function& f, int lineno);
     
     void instrument_file(file* f);
 
