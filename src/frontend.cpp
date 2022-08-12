@@ -225,8 +225,6 @@ int main(int argc, const char **argv)
     instrumentor CodeInstrumentor;
 
 
-    // findFiles(OptionsParser.getSourcePathList(), CodeInstrumentor); //Locate source files and mark for instrumentation/skipping
-
     CodeInstrumentor.set_exec_name(argv[0]);
 
     CodeInstrumentor.inst_inline = do_inline;
@@ -244,5 +242,5 @@ int main(int argc, const char **argv)
     CodeInstrumentor.findFiles(OptionsParser.getSourcePathList());
 
     CodeInstrumentor.instrument();
-    
+
 }

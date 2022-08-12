@@ -836,6 +836,7 @@ private:
 
 };
 
+// Libtooling source consumer, uses selective instrumentation information to only parse selected files
 class ParseSourceConsumer : public clang::ASTConsumer
 {
     ParseSourceVisitor file_visitor;
@@ -901,6 +902,7 @@ class ParseSourceConsumer : public clang::ASTConsumer
     }
 };
 
+// Libtooling frontend action to parse source files into internal structure
 class ParseSourceAction : public ASTFrontendAction
 {
   public:
@@ -910,6 +912,8 @@ class ParseSourceAction : public ASTFrontendAction
     }
 };
 
+// Completes internal structure of files with preproccessor information that is not available to libtooling
+//      This requires a lot of ugly c++ string manipulation
 void fill_file(std::string name, file* f) {
     unsigned line = 1;
     unsigned col = 1;
@@ -1202,4 +1206,29 @@ void instrumentor::instrument() {
 
         f->emit(newname);
     }
+
+    for (std::string fname : files_skipped)
+    {
+        std::ifstream og_file;
+        std::ofstream inst_file;
+        std::string newname = fname;
+        if (!outputfile.empty())
+        {
+            newname = outputfile;
+        }
+        else
+        {
+            newname.insert(newname.find_last_of("."), ".inst");
+        }
+        DPRINT("new filename (skip): %s\n", newname.c_str());
+
+        inst_file.open(newname);
+        og_file.open(fname);
+
+        inst_file << og_file.rdbuf();
+
+        og_file.close();
+        inst_file.close();
+    }
+
 }

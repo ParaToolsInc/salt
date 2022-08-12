@@ -52,6 +52,7 @@ bool comp_inst_loc(inst_loc *first, inst_loc *second); // only works for inst_lo
 bool eq_inst_loc(inst_loc *first, inst_loc *second);
 bool check_file_against_list(std::list<std::string> list, std::string fname);
 
+// Internal type for tracking functions, stores instrumentation locations and function body
 class function {
 public:
     std::string name; // metadata etc..
@@ -65,8 +66,10 @@ public:
     function(std::string nm, std::string text, std::vector<inst_loc*>);
 
     function();
+
 };
 
+// Class used for storing parts of files as either functions or text, using union to express variant types
 struct fileElement {
 
     enum{TEXT, FUNC} tag;
@@ -96,14 +99,16 @@ struct fileElement {
 
 };
 
+// Stores complete structure of files
 class file {
 public:
     std::string name;
     std::vector <fileElement> elements;
 
-    void emit(std::string fname); // TODO
+    void emit(std::string fname);
 };
 
+// Instrumentor class: Each instance can be passed files, instrumentation requests, and configuration files, then 
 class instrumentor {
 public:
 
@@ -125,22 +130,31 @@ public:
     std::map<std::string, file*> fileMap;
     char* exec_name;
 
+    // Parses source files into internal structure
     void parse_files(const clang::tooling::CompilationDatabase &Compilations, llvm::ArrayRef< std::string > SourcePaths);
 
+    // Finds files from source paths that require no instrumentation, but must produce a .inst version
     void findFiles(const std::vector<std::string>& files);
 
+    // Generates instrumentation information from file
     void processInstrumentationRequests(const char *fname); // Configuration file and selective instrumentation are specific to the instrumentor object
 
+    // Applies instrumentation information from `processInstrumentationRequests` to the currently tracked files
     void apply_selective_instrumentation();
 
+    // Sets executable name for timer names
     void set_exec_name(const char* name);
     
+    // Adds .yaml configuration file to instrumentation plan
     void configure(const char* configuration_file);
 
+    // Instruments all files that have been parsed, emits all required .inst files
+    void instrument();
+
+
+private:
     std::string instrument_func(function& f, int lineno);
     
     void instrument_file(file* f);
-
-    void instrument();
 
 };
