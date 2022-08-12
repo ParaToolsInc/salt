@@ -47,7 +47,7 @@ LABEL maintainer "ParaTools Inc."
 # Install packages for minimal useful image.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libstdc++-7-dev \
-        vim libz-dev libtinfo-dev make binutils && \
+        vim libz-dev libtinfo-dev make binutils cmake git && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy build results of stage 1 to /usr/local.

@@ -1,8 +1,8 @@
 HEADERS=$(wildcard include/*.h)
 LLVM_CXXFLAGS=-I$(CLANG_INC_DIR) $(CXX_STD) -fno-rtti -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS
-LLVM_LDFLAGS=-L$(CLANG_LIB_DIR) -Wl,-rpath,$(CLANG_LIB_DIR)
+LLVM_LDFLAGS=-L$(CLANG_LIB_DIR) -Wl,-rpath,$(CLANG_LIB_DIR) -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined
 CXX=$(CLANG_DIR)/clang++
-CXXFLAGS=-g -O3 -I$(PREFIX)/include -I$(PREFIX) -Wall -Werror -Wpedantic 
+CXXFLAGS=-g -O3 -I$(PREFIX)/include -I$(PREFIX) -Wall -Werror -Wpedantic
 
 all: $(PREFIX)/cparse-llvm
 
@@ -11,10 +11,10 @@ install: $(PREFIX)/cparse-llvm
 	cp -f cparse-llvm $(INSTALL_PREFIX)/bin/cxxparse-llvm
 
 $(PREFIX)/parse: $(PREFIX)/src/parse.cpp $(HEADERS)
-	$(CXX) -g -O3 $(LLVM_CXXFLAGS) $(PREFIX)/src/parse.cpp -o $(PREFIX)/parse $(LLVM_LDFLAGS) 
+	$(CXX) -g -O3 $(LLVM_CXXFLAGS) $(PREFIX)/src/parse.cpp -o $(PREFIX)/parse $(LLVM_LDFLAGS)
 
 $(PREFIX)/cparse-llvm: $(PREFIX)/src/frontend.o $(PREFIX)/src/selectfile.o $(PREFIX)/src/instrumentor.o
-	$(CXX) $(CXXFLAGS) -o $(PREFIX)/cparse-llvm $(PREFIX)/src/frontend.o $(PREFIX)/src/selectfile.o $(PREFIX)/src/instrumentor.o $(LLVM_LDFLAGS) $(CLANG_LIBS) $(LLVM_LIBS) 
+	$(CXX) $(CXXFLAGS) -o $(PREFIX)/cparse-llvm $(PREFIX)/src/frontend.o $(PREFIX)/src/selectfile.o $(PREFIX)/src/instrumentor.o $(LLVM_LDFLAGS) $(CLANG_LIBS) $(LLVM_LIBS)
 
 $(PREFIX)/src/frontend.o: $(PREFIX)/src/frontend.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $(LLVM_CXXFLAGS) $(PREFIX)/src/frontend.cpp -o $(PREFIX)/src/frontend.o

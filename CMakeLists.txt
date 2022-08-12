@@ -2,9 +2,9 @@
 # Generic CMake settings for SALT
 #--------------------------------
 
-cmake_minimum_required(VERSION 3.16.1)
+cmake_minimum_required(VERSION 3.13.1)
 # Ensure policies are set as they have been tested
-cmake_policy(VERSION 3.16.1...3.23.2)
+cmake_policy(VERSION 3.13.1...3.23.2)
 if(POLICY CMP0074)
   cmake_policy(SET CMP0074 NEW)
 endif()
@@ -92,7 +92,9 @@ project(SALT
 find_package(LLVM REQUIRED CONFIG)
 
 # Set the LLVM components needed by salt
-set(LLVM_NEEDED_COMPONENTS demangle support)
+set(LLVM_NEEDED_COMPONENTS
+  all
+  )
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
@@ -122,13 +124,40 @@ configure_file(
   "${CMAKE_SOURCE_DIR}/include/clang_header_includes.h.in" "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
   @ONLY)
 
-# Add an interface library so that we don't have to repeat ourselves
+#------------------------------------------
+# Specify clang and system libraries needed
+#------------------------------------------
+# There should be a better way of doing this, but the llvm libtooling example just puts
+# user written clang tools within the llvm/clang source tree....
+set(SYSTEM_LIBS -lrt -ldl -lpthread -lm)
+set(CLANG_LIBS
+  -lclangFrontend
+  -lclangSerialization
+  -lclangDriver
+  -lclangTooling
+  -lclangParse
+  -lclangSema
+  -lclangAnalysis
+  -lclangEdit
+  -lclangAST
+  -lclangLex
+  -lclangBasic
+  -lclangRewrite
+  -lclangRewriteFrontend
+)
+
+#-----------------------------------------
+# Add an interface library to link against
+#-----------------------------------------
+
+# This provides an abstraction and shorthand so that you can just `target_link_libraries()` against
+# the SALT_LLVM_TOOLING interface library
 add_library(SALT_LLVM_TOOLING INTERFACE)
 target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
 target_compile_options(SALT_LLVM_TOOLING INTERFACE -std=c++14 -fno-exceptions -fno-rtti -Wall -Werror -Wpedantic)
-target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${LLVM_LIBS} -lclang)
+target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS} ${SYSTEM_LIBS})
 
 #---------------------------------
 # List the header and source files
@@ -136,7 +165,13 @@ target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${LLVM_LIBS} -lclang)
 
 # Explicitly listing source files is safer than globbing them--you might accidentally put
 # an experiment or back up file in include or src and not realize it.
-set(SALT_HEADER_FILES dprint.hpp selectfile.hpp tau_datatypes.h tooling.hpp)
+set(SALT_HEADER_FILES
+  dprint.hpp
+  ryml_all.hpp
+  selectfile.hpp
+  tau_datatypes.h
+  tooling.hpp
+)
 
 list(TRANSFORM SALT_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
 list(APPEND SALT_HEADER_FILES "${CMAKE_BINARY_DIR}/include/clang_header_includes.h")
@@ -146,7 +181,12 @@ set_source_files_properties(
   GENERATED TRUE
 )
 
-set(CPARSE_LLVM_SRCS tooling.cpp selectfile.cpp)
+set(CPARSE_LLVM_SRCS
+  frontend.cpp
+  instrumentor.cpp
+  selectfile.cpp
+)
+
 list(TRANSFORM CPARSE_LLVM_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 
 #---------------------
@@ -158,7 +198,4 @@ target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
 target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
 target_compile_features(cparse-llvm PUBLIC cxx_std_14)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
-
-# add_executable(parse)
-# target_sources(parse PUBLIC "${CMAKE_SOURCE_DIR}/src/parse.cpp")
-# target_include_directories(parse PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
+target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
