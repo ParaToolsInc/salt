@@ -156,7 +156,7 @@ add_library(SALT_LLVM_TOOLING INTERFACE)
 target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
-target_compile_options(SALT_LLVM_TOOLING INTERFACE -std=c++14 -fno-exceptions -fno-rtti -Wall -Werror -Wpedantic)
+target_compile_options(SALT_LLVM_TOOLING INTERFACE -std=c++14 -fno-rtti -Wall -Werror -Wpedantic)
 target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS} ${SYSTEM_LIBS})
 
 #---------------------------------

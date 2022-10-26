@@ -32,11 +32,12 @@ RUN cmake -GNinja \
     -DCMAKE_MAKE_PROGRAM=/usr/local/bin/ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_ENABLE_PROJECTS=clang \
+    -DLLVM_TARGETS_TO_BUILD=X86 \
     -S /llvm-project/llvm -B /llvm-project/llvm/build
 
 # Build libraries, headers, and binaries
 RUN cd /llvm-project/llvm/build && \
-    ninja install-llvm-libraries install-llvm-headers \
+    ninja install-llvm-libraries install-llvm-headers install-llvm-tblgen \
         install-clang-libraries install-clang-headers install-clang \
         install-clang-resource-headers install-llvm-config install-cmake-exports
 
