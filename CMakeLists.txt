@@ -91,10 +91,14 @@ project(SALT
 # See https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project for more information
 find_package(LLVM REQUIRED CONFIG)
 
-# Set the LLVM components needed by salt
+# Available LLVM components are stored in $LLVM_AVAILABLE_LIBS and can be found with
+# `llvm-config --components`
+# Set the LLVM components needed by salt, see tools in the llvm-project/clang/tools/ and
+# llvm-project/clang-tools-extra for examples of CMakeLists.txt
 set(LLVM_NEEDED_COMPONENTS
-  all
-  )
+  option
+  passes
+)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
@@ -129,7 +133,7 @@ configure_file(
 #------------------------------------------
 # There should be a better way of doing this, but the llvm libtooling example just puts
 # user written clang tools within the llvm/clang source tree....
-set(SYSTEM_LIBS -lrt -ldl -lpthread -lm)
+set(SYSTEM_LIBS -lrt -ldl -lpthread -lm ) #-lz -ltinfo)
 set(CLANG_LIBS
   -lclangFrontend
   -lclangSerialization
