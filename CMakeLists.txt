@@ -114,6 +114,10 @@ message(STATUS "LLVM_DEFINITIONS: ${LLVM_DEFINITIONS}")
 message(STATUS "LLVM_ENABLE_ASSERTIONS: ${LLVM_ENABLE_ASSERTIONS}")
 message(STATUS "LLVM_ENABLE_EH: ${LLVM_ENABLE_EH}")
 message(STATUS "LLVM_ENABLE_RTTI: ${LLVM_ENABLE_RTTI}")
+if(NOT LLVM_ENABLE_RTTI)
+  set(USE_RTTI -fno-rtti)
+  message(STATUS "LLVM built with ENABLE_RTTI=FALSE, -fno-rtti will be passed when building & linking")
+endif()
 message(STATUS "LLVM_TOOLS_BINARY_DIR:\n\t${LLVM_TOOLS_BINARY_DIR}")
 
 include_directories(${LLVM_INCLUDE_DIRS})
@@ -133,21 +137,20 @@ configure_file(
 #------------------------------------------
 # There should be a better way of doing this, but the llvm libtooling example just puts
 # user written clang tools within the llvm/clang source tree....
-set(SYSTEM_LIBS -lrt -ldl -lpthread -lm ) #-lz -ltinfo)
 set(CLANG_LIBS
-  -lclangFrontend
-  -lclangSerialization
-  -lclangDriver
-  -lclangTooling
-  -lclangParse
-  -lclangSema
-  -lclangAnalysis
-  -lclangEdit
-  -lclangAST
-  -lclangLex
-  -lclangBasic
-  -lclangRewrite
-  -lclangRewriteFrontend
+  clangFrontend
+  clangSerialization
+  clangDriver
+  clangTooling
+  clangParse
+  clangSema
+  clangAnalysis
+  clangEdit
+  clangAST
+  clangLex
+  clangBasic
+  clangRewrite
+  clangRewriteFrontend
 )
 
 #-----------------------------------------
@@ -160,7 +163,7 @@ add_library(SALT_LLVM_TOOLING INTERFACE)
 target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
-target_compile_options(SALT_LLVM_TOOLING INTERFACE -std=c++14 -fno-rtti -Wall -Werror -Wpedantic)
+target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
 target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS} ${SYSTEM_LIBS})
 
 #---------------------------------
