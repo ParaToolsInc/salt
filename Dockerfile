@@ -102,4 +102,4 @@ COPY --from=builder /usr/local/bin/ninja /usr/local/bin/
 # Copy build results of stage 1 to /usr/local.
 COPY --from=builder /tmp/llvm/ /usr/local/
 
-WORKDIR /tmp/salt/
+WORKDIR /home/salt/

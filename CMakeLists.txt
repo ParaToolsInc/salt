@@ -215,3 +215,17 @@ target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${C
 target_compile_features(cparse-llvm PUBLIC cxx_std_14)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
 target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
+
+
+#---------------
+# Tests
+#---------------
+include(CTest)
+
+add_test(NAME smoke_test
+  COMMAND $<TARGET_FILE:cparse-llvm> --help)
+set_tests_properties(smoke_test
+  PROPERTIES
+  LABELS smoke
+  PASS_REGULAR_EXPRESSION "OVERVIEW"
+)
