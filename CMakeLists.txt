@@ -90,6 +90,14 @@ project(SALT
 
 # See https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project for more information
 find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
+
+# get_cmake_property(_variableNames VARIABLES)
+# list (SORT _variableNames)
+# foreach (_variableName ${_variableNames})
+#   message(STATUS "${_variableName}=${${_variableName}}")
+# endforeach()
+
 
 # Available LLVM components are stored in $LLVM_AVAILABLE_LIBS and can be found with
 # `llvm-config --components`
@@ -123,8 +131,9 @@ message(STATUS "LLVM_TOOLS_BINARY_DIR:\n\t${LLVM_TOOLS_BINARY_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 
-list(LENGTH LLVM_INCLUDE_DIRS NUM_CLANG_HEADER_INCLUDES)
-list(JOIN LLVM_INCLUDE_DIRS "\", \"-I" CLANG_HEADER_INCLUDES)
+
+list(LENGTH CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES NUM_CLANG_HEADER_INCLUDES)
+list(JOIN CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "\", \"-I" CLANG_HEADER_INCLUDES)
 set(CLANG_HEADER_INCLUDES "\"-I${CLANG_HEADER_INCLUDES}\"")
 message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
 message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
