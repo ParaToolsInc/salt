@@ -15,4 +15,6 @@ jobs:
       - name: Configure SALT
         run: cmake -Wdev -Wdeprecated -G Ninja -S . -B build
       - name: Compile SALT
-        run: cmake --build build
+        run: |
+          echo "Cores: $(nproc)"
+          cmake --build build --verbose
