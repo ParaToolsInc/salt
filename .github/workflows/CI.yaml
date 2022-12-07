@@ -17,4 +17,4 @@ jobs:
       - name: Compile SALT
         run: |
           echo "Cores: $(nproc)"
-          cmake --build build --verbose
+          cmake --build build --parallel $(nproc) || cmake --build build --verbose
