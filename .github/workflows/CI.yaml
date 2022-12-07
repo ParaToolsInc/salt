@@ -12,3 +12,7 @@ jobs:
             echo "Working directory: $(pwd)"
             echo "Working directory contents:"
             ls -la
+      - name: Configure SALT
+        run: cmake -Wdev -Wdeprecated -G Ninja -S . -B build
+      - name: Compile SALT
+        run: cmake --build build
