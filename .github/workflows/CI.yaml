@@ -13,7 +13,7 @@ jobs:
             echo "Working directory contents:"
             ls -la
       - name: Configure SALT
-        run: cmake -Wdev -Wdeprecated -G Ninja -S . -B build
+        run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
       - name: Compile SALT
         run: |
           echo "Cores: $(nproc)"
