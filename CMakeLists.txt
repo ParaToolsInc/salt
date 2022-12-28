@@ -214,7 +214,7 @@ target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
 target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
 target_compile_features(cparse-llvm PUBLIC cxx_std_14)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
-target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
+target_link_options(cparse-llvm PUBLIC -static -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
 
 
 #---------------
