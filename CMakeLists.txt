@@ -173,7 +173,7 @@ target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
 target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
-target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS} ${SYSTEM_LIBS})
+target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS})
 
 #---------------------------------
 # List the header and source files
@@ -229,3 +229,21 @@ set_tests_properties(smoke_test
   LABELS smoke
   PASS_REGULAR_EXPRESSION "OVERVIEW"
 )
+
+add_test(NAME setup_inputs
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/config_files ./config_files)
+add_test(NAME cleanup_inputs
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ./config_files)
+set_tests_properties(setup_inputs PROPERTIES FIXTURES_SETUP Configs)
+set_tests_properties(cleanup_inputs PROPERTIES FIXTURES_CLEANUP Configs)
+
+add_test(NAME instrument_1
+  COMMAND $<TARGET_FILE:cparse-llvm> ${CMAKE_SOURCE_DIR}/tests/hello.c)
+set_tests_properties(instrument_1
+  PROPERTIES FIXTURES_REQUIRED Configs
+  REQUIRED_FILES "${CMAKE_SOURCE_DIR}/tests/hello.c")
+add_test(NAME instrument_1_exists
+  COMMAND ${CMAKE_COMMAND} -E cat ./hello.inst.c)
+set_tests_properties(instrument_1_exists
+  PROPERTIES DEPENDS instrument_1
+  PASS_REGULAR_EXPERSSION "TAU_")

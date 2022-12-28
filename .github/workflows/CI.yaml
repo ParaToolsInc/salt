@@ -16,5 +16,7 @@ jobs:
         run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
       - name: Compile SALT
         run: |
-          echo "Cores: $(nproc)"
+          echo "Cores: $(nproc) "
           cmake --build build --parallel $(nproc) || cmake --build build --verbose
+      - name: Run Tests
+        run: cd build && ctest --output-on-failure
