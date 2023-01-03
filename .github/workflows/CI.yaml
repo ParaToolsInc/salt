@@ -4,7 +4,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: paratools/salt-dev:0.2
+      image: paratools/salt-dev:0.3
     steps:
       - uses: actions/checkout@v3
       - name: Print working directory
