@@ -220,6 +220,33 @@ target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-unde
 #---------------
 # Tests
 #---------------
+# There are some assumptions made in testing:
+# 1. Test source files to be instrumented are located in ${CMAKE_SOURCE_DIR}/tests/
+# 2. Tests are currently not using MPI
+# 3. Only pthread threading is assumed
+# 4. TAU is installed into the default location of /usr/local/x86_64
+# 5. TAU is installed with the following configuratins:
+#    - Makefile.tau-clang-pthread
+#    - Makefile.tau-pthread
+# 6. SALT parser configuration files are in ${CMAKE_SOURCE_DIR}/config_files
+
+# Care has been taken to break test inter-dependencies where possible and
+# express them explicitly with the DEPENDS test property.
+# Also each test should not enter a race condition or need to use the
+# RESOURCE_LOCK property.
+# e.g., Executable names are different when compiled with gcc vs clang and
+# each test using its own PROFILE_DIR so as not to clobber profile.n.n.n files.
+# As a result you may run the tests in parallel via something like:
+# `ctest --output-on-failure -j 20`
+
+# List of tests to run from ${CMAKE_SOURCE_DIR}/tests/
+# When adding more test sources, add them here.
+set(TESTS_LIST
+  hello.c
+  1d.c
+  c11test.cpp
+)
+
 include(CTest)
 
 # Smoke test to check instrumentor compiled and will run
@@ -239,15 +266,11 @@ add_test(NAME cleanup_inputs
 set_tests_properties(setup_inputs PROPERTIES FIXTURES_SETUP Configs)
 set_tests_properties(cleanup_inputs PROPERTIES FIXTURES_CLEANUP Configs)
 
-# List of tests to run from ${CMAKE_SOURCE_DIR}/tests/
-set(TESTS_LIST
-  hello.c
-  1d.c
-  c11test.cpp
-)
-
-# Function to map tests_list to source files and setup tests
+# Function to map tests_list to source files and setup parser tests
 function(add_instrumentor_test test_src)
+  # This is 1 of 2 functions for adding tests
+  # It is somewhat fragile/opinionated and passing the optional argument
+  # will likely lead to more trouble than it's worth.
   get_filename_component(TEST_BASE_NAME ${test_src} NAME_WE)
   set(TEST_NAME "instrument_${TEST_BASE_NAME}")
   get_filename_component(TEST_LANG ${test_src} LAST_EXT)
@@ -347,6 +370,12 @@ set(TAU_GCC_HEADER_LOCATIONS
 )
 
 function(compile_instrumented test_src)
+  # This is the 2nd of 2 functions for adding tests.
+  # It is opinionated and perhaps somewhat fragile.
+  # Using the optional argument in this function and the previous one
+  # is untested and may cause issues.
+  # A more robust design might be to incorporate both functions into a
+  # single function.
   get_filename_component(TEST_BASE_NAME ${test_src} NAME_WE)
   set(TEST_NAME "${TEST_BASE_NAME}")
   # This next line depends on the previous function implementation
@@ -433,6 +462,6 @@ function(compile_instrumented test_src)
   endforeach()
 endfunction()
 
-compile_instrumented(hello.c)
-compile_instrumented(1d.c)
-compile_instrumented(c11test.cpp)
+foreach(test_source IN LISTS TESTS_LIST)
+  compile_instrumented(${test_source})
+endforeach()
