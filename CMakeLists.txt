@@ -349,7 +349,8 @@ set(TAU_GCC_HEADER_LOCATIONS
 function(compile_instrumented test_src)
   get_filename_component(TEST_BASE_NAME ${test_src} NAME_WE)
   set(TEST_NAME "${TEST_BASE_NAME}")
-  set(depends_on ${TEST_BASE_NAME})
+  # This next line depends on the previous function implementation
+  set(depends_on instrument_${TEST_BASE_NAME})
   get_filename_component(TEST_LANG ${test_src} LAST_EXT)
   string(REPLACE "." "" TEST_LANG ${TEST_LANG})
   set(extra_args ${ARGN})
@@ -361,7 +362,8 @@ function(compile_instrumented test_src)
   endif()
   if(n_extra_args EQUAL 1)
     set(TEST_NAME ${ARGV1})
-    set(depends_on ${ARGV1})
+    # This next line depends on the previous function implementation
+    set(depends_on instrument_${ARGV1})
   endif()
 
   if(${TEST_LANG} STREQUAL "c")
@@ -426,6 +428,7 @@ function(compile_instrumented test_src)
       PROPERTIES
       PASS_REGULAR_EXPRESSION "GROUP=\"TAU_USER"
       FAIL_REGULAR_EXPRESSION "addr=\<0x"
+      DEPENDS run_${lower_comp}_${TEST_NAME}
     )
   endforeach()
 endfunction()
