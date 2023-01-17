@@ -89,6 +89,13 @@ project(SALT
 #----------
 
 # See https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project for more information
+# If LLVM and/or Clang installations are partial,
+# then their supplied CMake exports files need to be patched.
+# This is already done in the salt-dev docker container.
+# The patches are kept as a git submodule at ./cmake/llvm-patches
+# and the upstream at https://github.com/ParaToolsInc/salt-llvm-patches
+# If either of the steps below fails and you have write access to the
+# LLCV/Clang installations, try patching them using the supplied patches
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 

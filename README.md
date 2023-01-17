@@ -39,6 +39,13 @@ git clone --recursive https://github.com/ParaToolsInc/salt.git
 Including the `--recursive` flag will ensure you have the patches
 that are applied to the `llvm`/`clang` installed CMake files available to you.
 This is not a requirement if using the [salt-dev] container image.
+The patches prevent SALT's configuration with CMake from failing when
+incomplete/minimal installations of LLVM and Clang are present.
+A minimal subset of components must be installed.
+If SALT is failing to be configured in the next step,
+and you have write access to the LLVM and/or Clang installation,
+applying the patches from https://github.com/ParaToolsInc/salt-llvm-patches
+may fix the problem.
 
 ### 2. Fire up the salt-dev docker image (optional)
 
