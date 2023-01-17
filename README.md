@@ -98,6 +98,11 @@ The tests are all located in the `tests` subdirectory of the project.
  * Old profiles associated with each test are JIT removed
  * New profiles are moved to subdirectories indicating which test they are assosciated with
 
+A limitation of the tests is that they assume a TAU installation matching the [salt-dev]
+development image.
+If you don't have a GCC and Clang configuration of TAU installed into the default location
+(`/usr/local/x86_64/`) then some of the tests will fail.
+
 ### 5. Example usage:
 
 ```

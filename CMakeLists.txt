@@ -307,6 +307,11 @@ foreach(test_source IN LISTS TESTS_LIST)
 endforeach()
 
 
+################
+# The following paths are fragile and somewhat specific to
+# the salt-dev container.
+# More abstract & robust logic for reasoning about TAU
+# isntallations and their locations would be helpful here.
 find_file(TAU_CLANG_MAKEFILE Makefile.tau-clang-pthread
   PATH_SUFFIXES x86_64 x86_64/lib
 )
@@ -322,6 +327,21 @@ find_program(TAUCXX tau_cxx.sh
 find_program(TAU_EXEC tau_exec
   PATH_SUFFIXES x86_64 x86_64/bin
 )
+
+set(TAU_HEADER_LOCATIONS
+  -I/usr/local/include
+)
+set(TAU_CLANG_HEADER_LOCATIONS
+  -I/usr/local/x86_64/libdwarf-clang/include
+  -I/usr/local/x86_64/libunwind-1.3.1-clang/include
+)
+set(TAU_GCC_HEADER_LOCATIONS
+  -I/usr/local/x86_64/libdwarf-clang/include
+  -I/usr/local/x86_64/libunwind-1.3.1-clang/include
+)
+# End of section that note applies to
+################
+
 
 set(TAU_COMPILE_OPTIONS -fPIC -g)
 set(TAU_C_DEFINITIONS
@@ -356,17 +376,6 @@ set(TAU_C_CLANG_DEFINITIONS
 )
 set(TAU_C_GCC_DEFINITIONS
   -DTAU_GNU
-)
-set(TAU_HEADER_LOCATIONS
-  -I/usr/local/include
-)
-set(TAU_CLANG_HEADER_LOCATIONS
-  -I/usr/local/x86_64/libdwarf-clang/include
-  -I/usr/local/x86_64/libunwind-1.3.1-clang/include
-)
-set(TAU_GCC_HEADER_LOCATIONS
-  -I/usr/local/x86_64/libdwarf-clang/include
-  -I/usr/local/x86_64/libunwind-1.3.1-clang/include
 )
 
 function(compile_instrumented test_src)
