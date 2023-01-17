@@ -7,6 +7,8 @@ jobs:
       image: paratools/salt-dev:0.4
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Print working directory
         run: |
             echo "Working directory: $(pwd)"

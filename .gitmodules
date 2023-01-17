@@ -1,0 +1,3 @@
+[submodule "cmake/llvm-patches"]
+	path = cmake/llvm-patches
+	url = https://github.com/ParaToolsInc/salt-llvm-patches.git
