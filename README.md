@@ -50,8 +50,9 @@ may fix the problem.
 ### 2. Fire up the salt-dev docker image (optional)
 
 ``` shell
+$ docker pull paratools/salt-dev:latest
 $ docker run -it --pull --tmpfs=/dev/shm:rw,nosuid,nodev,exec \
-    --privileged -v $(pwd):/home/salt/src salt-dev:latest
+    --privileged -v $(pwd):/home/salt/src paratools/salt-dev:latest
 # cd /home/salt/src
 # ccache --show-stats
 ```
