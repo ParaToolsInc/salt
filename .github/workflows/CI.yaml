@@ -4,25 +4,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: platinumcd/paratools-llvm-salt:latest
+      image: paratools/salt-dev:1.0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Print working directory
         run: |
             echo "Working directory: $(pwd)"
             echo "Working directory contents:"
             ls -la
-      - name: Build Instrumentor
+      - name: Configure SALT
+        run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
+      - name: Compile SALT
         run: |
-            echo "Begin Configuration"
-            ./configure.sh
-            echo "End Configuration"
-            echo "Begin build"
-            make
-            echo "End build"
-      - name: Test Instrumentor
-        run: |
-            echo "Begin tests"
-            ./cparse-llvm tests/hello.c
-            cat hello.inst.c
-            echo "End tests"
+          echo "Cores: $(nproc) "
+          cmake --build build --parallel $(nproc) || cmake --build build --verbose
+      - name: Run Tests
+        run: cd build && ctest --output-on-failure
