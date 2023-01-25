@@ -130,4 +130,4 @@ Running `tau_exec ./hello` should then produce a `profile.0.0.0` file.
 [CMake]: https://cmake.org
 [salt-dev]: https://github.com/ParaToolsInc/salt-dev
 [posted to Docker Hub]: https://hub.docker.com/repository/docker/paratools/salt-dev/general
-[CMakeLists.txt file]: https://github.com/ParaToolsInc/salt/blob/master/CMakeLists.txt
+[CMakeLists.txt file]: https://github.com/ParaToolsInc/salt/blob/364be5ddd0043281669ace6697dfaf05fe724511/CMakeLists.txt#L353-L386
