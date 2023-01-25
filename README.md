@@ -114,11 +114,13 @@ If you don't have a GCC and Clang configuration of TAU installed into the defaul
 ### 5. Example usage:
 
 ```
+# Ensure the config files are present with something like:
+# cp ../config_files ./
 ./cparse-llvm ../tests/hello.c
 ```
 This will produce a file `hello.inst.c`.
 Passing the correct defines (see the [CMakeLists.txt file]) and
-setting `TAU_MAKEFILE=/usr/local/x86_64/lib/Makefile...` will allow you
+setting `TAU_MAKEFILE=/usr/local/x86_64/lib/Makefile.tau-pthread` will allow you
 to compile `hello.inst.c` with `tau_cc.sh -optLinkOnly -D... hello.inst.c -o hello`.
 Running `tau_exec ./hello` should then produce a `profile.0.0.0` file.
 
