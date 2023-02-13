@@ -114,10 +114,10 @@ If you don't have a GCC and Clang configuration of TAU installed into the defaul
 ### 5. Example usage:
 
 ```
-# Ensure the config files are present with something like:
-# cp ../config_files ./
-./cparse-llvm ../tests/hello.c
+# Point to the appropriate config file if config_files/config.yaml is not in CWD
+./cparse-llvm --config_file=/path/to/config.yaml ../tests/hello.c
 ```
+
 This will produce a file `hello.inst.c`.
 Passing the correct defines (see the [CMakeLists.txt file]) and
 setting `TAU_MAKEFILE=/usr/local/x86_64/lib/Makefile.tau-pthread` will allow you
