@@ -25,6 +25,10 @@ using namespace clang;
 llvm::cl::opt<std::string> outputfile("tau_output", llvm::cl::desc("Specify name of output instrumented file"),
                                       llvm::cl::value_desc("filename"), llvm::cl::cat(MyToolCategory));
 
+llvm::cl::opt<std::string> configfile("config_file", llvm::cl::desc("Specify path to SALT configuration YAML file"),
+                                      llvm::cl::value_desc("filename"), llvm::cl::init("config_files/config.yaml"),
+                                      llvm::cl::cat(MyToolCategory));
+
 llvm::cl::opt<bool> use_cxx_api("tau_use_cxx_api", llvm::cl::desc("Use TAU's C++ instrumentation API"),
                                 llvm::cl::init(false), llvm::cl::cat(MyToolCategory));
 

@@ -26,6 +26,8 @@ static llvm::cl::OptionCategory MyToolCategory(
 
 extern llvm::cl::opt<std::string> outputfile;
 
+extern llvm::cl::opt<std::string> configfile;
+
 extern llvm::cl::opt<bool> use_cxx_api;
 
 extern llvm::cl::opt<bool> do_inline;
