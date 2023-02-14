@@ -1117,11 +1117,10 @@ void instrumentor::instrument()
         }
 
         // Read config.yaml
-        mkdir("config_files", 0777);        
         ryml::Tree yaml_tree;
-        if (FILE *config_file = fopen("config_files/config.yaml", "r"))
+        if (FILE *config_file = fopen(configfile.c_str(), "r"))
         {
-            std::string contents = file_get_contents(config_file); 
+            std::string contents = file_get_contents(config_file);
             yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(contents));
             ryml::emit(yaml_tree, yaml_tree.root_id(), config_file);
             fclose(config_file);
