@@ -4,6 +4,7 @@
 #include <ryml_all.hpp>
 #include "clang/Tooling/Tooling.h"
 #include <vector>
+#include <set>
 
 /* defines */
 #ifdef TAU_WINDOWS

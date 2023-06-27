@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <set>
 
 #include "selectfile.hpp"
 #include "dprint.hpp"
@@ -681,6 +682,8 @@ void parseError(const char *message, char *line, int lineno, int column)
 //
 // } // END void parseInstrumentationCommand(char *line, int lineno)
 
+#define SALT_UNUSED(expr) do { (void)(expr); } while (0)
+
 void processInstrumentationRequests(const char *fname)
 {
 
@@ -688,6 +691,7 @@ void processInstrumentationRequests(const char *fname)
   char line[INBUF_SIZE];
   char* inbuf;
   int lineno = 0;
+  SALT_UNUSED(lineno); // prevent compiler errors
 
 
   if (!input) {
