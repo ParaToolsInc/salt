@@ -51,7 +51,7 @@ may fix the problem.
 
 ``` shell
 $ docker pull paratools/salt-dev:latest
-$ docker run -it --pull --tmpfs=/dev/shm:rw,nosuid,nodev,exec \
+$ docker run -it --pull always --tmpfs=/dev/shm:rw,nosuid,nodev,exec \
     --privileged -v $(pwd):/home/salt/src paratools/salt-dev:latest
 # cd /home/salt/src
 # ccache --show-stats
@@ -106,10 +106,19 @@ The tests are all located in the `tests` subdirectory of the project.
  * Old profiles associated with each test are JIT removed
  * New profiles are moved to subdirectories indicating which test they are assosciated with
 
-A limitation of the tests is that they assume a TAU installation matching the [salt-dev]
+By default the tests assume a TAU installation matching the [salt-dev]
 development image.
 If you don't have a GCC and Clang configuration of TAU installed into the default location
 (`/usr/local/x86_64/`) then some of the tests will fail.
+
+Alternatively you can add `-DTAU_ROOT=<dir>` to the cmake invocation to point the tests
+to a different location. The tests require TAU to be built with these two configurations:
+
+ `-pthread -cc=clang -c++=clang++ -bfd=download -unwind=download -dwarf=download -otf=download`
+
+ and
+ 
+ `-pthread -bfd=download -unwind=download -libdwarf=download -otf=download`
 
 ### 5. Example usage:
 
