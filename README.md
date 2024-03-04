@@ -51,7 +51,7 @@ may fix the problem.
 
 ``` shell
 $ docker pull paratools/salt-dev:latest
-$ docker run -it --pull --tmpfs=/dev/shm:rw,nosuid,nodev,exec \
+$ docker run -it --pull always --tmpfs=/dev/shm:rw,nosuid,nodev,exec \
     --privileged -v $(pwd):/home/salt/src paratools/salt-dev:latest
 # cd /home/salt/src
 # ccache --show-stats
@@ -65,7 +65,7 @@ for testing with both GCC and Clang.
 ### 3. Configure and build SALT:
 
 This step is most easily performed in the [salt-dev] container,
-but can also be performed in a suitable installation of LLVM and Clang are present.
+but can also be performed if a suitable installation of LLVM and Clang are present.
 
 ``` shell
 # Tell CMake to use the clang/clang++ compiler to build SALT
@@ -75,6 +75,8 @@ export CXX=clang++
 cmake -Wdev -Wdeprecated -S . -B build
 cmake --build build --parallel # Add --verbose to debug something going wrong
 ```
+To specify a TAU installation for testing other than the one used by the [salt-dev] container
+you can add `-DTAU_ROOT=<dir>` to the first cmake invocation.
 
 If the Ninja build system is present and you prefer it to Makefiles
 (it's already present in the [salt-dev] container image),
@@ -106,10 +108,17 @@ The tests are all located in the `tests` subdirectory of the project.
  * Old profiles associated with each test are JIT removed
  * New profiles are moved to subdirectories indicating which test they are assosciated with
 
-A limitation of the tests is that they assume a TAU installation matching the [salt-dev]
-development image.
-If you don't have a GCC and Clang configuration of TAU installed into the default location
-(`/usr/local/x86_64/`) then some of the tests will fail.
+By default the tests assume a TAU installation matching the [salt-dev]
+development image (located at `/usr/local/x86_64/` with a GCC and Clang configuration).
+
+To use a different TAU installation add `-DTAU_ROOT=<dir>` to the cmake invocation. 
+The specified directory should point to a TAU install built with at least these two configurations:
+
+ `-pthread -cc=clang -c++=clang++ -bfd=download -unwind=download -dwarf=download -otf=download`
+
+ and
+ 
+ `-pthread -bfd=download -unwind=download -libdwarf=download -otf=download`
 
 ### 5. Example usage:
 

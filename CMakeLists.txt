@@ -315,36 +315,43 @@ endforeach()
 
 
 ################
-# The following paths are fragile and somewhat specific to
+# The following default paths are fragile and somewhat specific to
 # the salt-dev container.
-# More abstract & robust logic for reasoning about TAU
-# isntallations and their locations would be helpful here.
+# For alternative TAU installs add -DTAU_ROOT=<dir> to the
+# cmake invication. Make sure TAU is built with these
+# configurations:  -pthread -cc=clang -c++=clang++ -bfd=download 
+# -unwind=download -dwarf=download -otf=download
+# and -pthread -bfd=download -unwind=download -libdwarf=download 
+# -otf=download
+
+set(TAU_ROOT "/usr/local" CACHE PATH "TAU Root Directory")
+
 find_file(TAU_CLANG_MAKEFILE Makefile.tau-clang-pthread
-  PATH_SUFFIXES x86_64 x86_64/lib
+PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
 )
 find_file(TAU_GCC_MAKEFILE Makefile.tau-pthread
-  PATH_SUFFIXES x86_64 x86_64/lib
+PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
 )
 find_program(TAUCC tau_cc.sh
-  PATH_SUFFIXES x86_64 x86_64/bin
+PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
 )
 find_program(TAUCXX tau_cxx.sh
-  PATH_SUFFIXES x86_64 x86_64/bin
+PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
 )
 find_program(TAU_EXEC tau_exec
-  PATH_SUFFIXES x86_64 x86_64/bin
+PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
 )
 
 set(TAU_HEADER_LOCATIONS
-  -I/usr/local/include
+  -I${TAU_ROOT}/include
 )
 set(TAU_CLANG_HEADER_LOCATIONS
-  -I/usr/local/x86_64/libdwarf-clang/include
-  -I/usr/local/x86_64/libunwind-1.3.1-clang/include
+  -I${TAU_ROOT}/x86_64/libdwarf-clang/include
+  -I${TAU_ROOT}/x86_64/libunwind-1.3.1-clang/include
 )
 set(TAU_GCC_HEADER_LOCATIONS
-  -I/usr/local/x86_64/libdwarf-clang/include
-  -I/usr/local/x86_64/libunwind-1.3.1-clang/include
+  -I${TAU_ROOT}/x86_64/libdwarf-clang/include
+  -I${TAU_ROOT}/x86_64/libunwind-1.3.1-clang/include
 )
 # End of section that note applies to
 ################
