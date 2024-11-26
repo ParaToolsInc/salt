@@ -1,0 +1,50 @@
+# export SALT_ROOT=/storage/packages/salt-fm
+# export PATH=$SALT_ROOT/base/tools/bin:$PATH
+# module use /storage/packages/salt-fm/spack/share/spack/modules/linux-rhel8-x86_64
+# module use /storage/packages/salt-fm/spack/share/spack/modules/linux-centos7-x86_64/
+
+spack:
+  view: false
+
+  concretizer:
+    reuse: false
+    unify: true
+
+  packages:
+    all:
+      require: "target=x86_64 %gcc"
+
+  modules:
+    default:
+      enable:
+      - tcl
+      tcl:
+        projections:
+          all: '{name}/{version}'
+        verbose: true
+        all:
+          autoload: direct
+          environment:
+            set:
+              '{name}_ROOT': '{PREFIX}'
+
+  compilers:
+  - compiler:
+      spec: gcc@=14.2.0
+      paths:
+        cc: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/gcc
+        cxx: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/g++
+        f77: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/gfortran
+        fc: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/gfortran
+      flags: {}
+      operating_system: rhel8
+      target: x86_64
+      modules: []
+      environment: {}
+      extra_rpaths: []
+
+  specs:
+  - llvm@git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9=19.1.4 +flang +mlir openmp=project
+  #  -   tau@master%gcc@14.2.0~adios2+binutils~comm~craycnl~cuda~disable-no-pie~dyninst+elf+fortran~gasnet+io~level_zero+libdwarf+libunwind+mpi~ompt~opari~opencl+openmp+otf2+papi+pdt~phase~ppc64le~profileparam+pthreads~python~rocm~rocprofiler~rocprofv2~roctracer~scorep~shmem~sqlite~syscall~x86_64 build_system=generic arch=linux-rhel8-x86_64
+  - tau@master +mpi +openmp cflags=-Wno-error=implicit-function-declaration
+  - mpich ~wrapperrpath
