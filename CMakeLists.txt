@@ -224,6 +224,9 @@ target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definition
 # You can try adding -static
 target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
 
+# Install the target
+install(TARGETS cparse-llvm DESTINATION bin)
+
 #---------------
 # Tests
 #---------------
