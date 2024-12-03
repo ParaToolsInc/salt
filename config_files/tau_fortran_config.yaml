@@ -11,7 +11,7 @@ program_insert:
   - "      call tau_profile_start(tauProfileTimer)"
   - "#ifndef TAU_MPI"
   - "      call  tau_profile_set_node(0);"
-  - "#endif ! TAU_MPI
+  - "#endif ! TAU_MPI"
 
 
 procedure_begin_insert:
