@@ -1,0 +1,24 @@
+# Config variables:
+#   ${full_timer_name}: "procedure_name [file_path {start}-{end}]"
+
+instrumentation: tauFortran
+
+main_insert:
+  - "      integer, save :: tauProfileTimer(2) = [0, 0]"
+  - "      call tau_profile_init()"
+  - "      call tau_profile_timer(tauProfileTimer, &"
+  - "        \"${full_timer_name}\")"
+  - "      call tau_profile_start(tauProfileTimer)"
+  - "#ifndef TAU_MPI"
+  - "      call  tau_profile_set_node(0);"
+  - "#endif ! TAU_MPI
+
+
+procedure_begin_insert:
+  - "      integer, save :: tauProfileTimer(2) = [0, 0]"
+  - "      call tau_profile_timer(tauProfileTimer, &"
+  - "        \"${full_timer_name}\")"
+  - "      call tau_profile_start(tauProfileTimer)"
+
+procedure_end_insert:
+  - "      call tau_profile_stop(tauProfileTimer)"
