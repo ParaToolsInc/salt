@@ -12,7 +12,7 @@ spack:
 
   packages:
     all:
-      require: "target=x86_64 %gcc"
+      require: target=x86_64 %gcc
 
   modules:
     default:
@@ -36,6 +36,19 @@ spack:
         cxx: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/g++
         f77: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/gfortran
         fc: /storage/packages/salt-fm/spack/opt/spack/linux-centos7-x86_64/gcc-10.2.1/gcc-14.2.0-ttkqi3sp7xwrxtwftfysf54cl4jje4qk/bin/gfortran
+      flags: {}
+      operating_system: rhel8
+      target: x86_64
+      modules: []
+      environment: {}
+      extra_rpaths: []
+  - compiler:
+      spec: clang@=19.1.5
+      paths:
+        cc: /storage/packages/salt-fm/spack/opt/spack/linux-rhel8-x86_64/gcc-14.2.0/llvm-git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9_19.1.4-zpacv56yg4t4223ih6aqzzzrt3b3i4sg/bin/clang
+        cxx: /storage/packages/salt-fm/spack/opt/spack/linux-rhel8-x86_64/gcc-14.2.0/llvm-git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9_19.1.4-zpacv56yg4t4223ih6aqzzzrt3b3i4sg/bin/clang++
+        f77: /storage/packages/salt-fm/spack/opt/spack/linux-rhel8-x86_64/gcc-14.2.0/llvm-git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9_19.1.4-zpacv56yg4t4223ih6aqzzzrt3b3i4sg/bin/flang
+        fc: /storage/packages/salt-fm/spack/opt/spack/linux-rhel8-x86_64/gcc-14.2.0/llvm-git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9_19.1.4-zpacv56yg4t4223ih6aqzzzrt3b3i4sg/bin/flang
       flags: {}
       operating_system: rhel8
       target: x86_64
