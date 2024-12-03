@@ -5,6 +5,9 @@
 cmake_minimum_required(VERSION 3.13.1)
 # Ensure policies are set as they have been tested
 cmake_policy(VERSION 3.13.1...3.23.2)
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
+endif()
 if(POLICY CMP0074)
   cmake_policy(SET CMP0074 NEW)
 endif()
@@ -327,7 +330,13 @@ endforeach()
 # and -pthread -bfd=download -unwind=download -libdwarf=download 
 # -otf=download
 
-set(TAU_ROOT "/usr/local" CACHE PATH "TAU Root Directory")
+# Check if TAU_ROOT is set as an environment variable and if not set it as a CMake cache variable to /usr/local
+# otherwise, use the value from the environment
+if(NOT DEFINED $ENV{TAU_ROOT})
+  set(TAU_ROOT "/usr/local" CACHE PATH "TAU Root Directory")
+else()
+  set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
+endif()
 
 find_file(TAU_CLANG_MAKEFILE Makefile.tau-clang-pthread
 PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
