@@ -3,7 +3,7 @@
 
 instrumentation: tauFortran
 
-main_insert:
+program_insert:
   - "      integer, save :: tauProfileTimer(2) = [0, 0]"
   - "      call tau_profile_init()"
   - "      call tau_profile_timer(tauProfileTimer, &"
