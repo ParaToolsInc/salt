@@ -78,6 +78,8 @@ if(CMAKE_ARGS)
   message("Passed command line CMAKE_ARGS: ${CMAKE_ARGS}")
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+
 #-----------------------------
 # Create the main SALT project
 #-----------------------------
