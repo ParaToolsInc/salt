@@ -5,20 +5,20 @@ instrumentation: tauFortran
 
 program_insert:
   - "      integer, save :: tauProfileTimer(2) = [0, 0]"
-  - "      call tau_profile_init()"
-  - "      call tau_profile_timer(tauProfileTimer, &"
+  - "      call TAU_PROFILE_INIT()"
+  - "      call TAU_PROFILE_TIMER(tauProfileTimer, &"
   - "        \"${full_timer_name}\")"
-  - "      call tau_profile_start(tauProfileTimer)"
+  - "      call TAU_PROFILE_START(tauProfileTimer)"
   - "#ifndef TAU_MPI"
-  - "      call  tau_profile_set_node(0);"
+  - "      call  TAU_PROFILE_SET_NODE(0);"
   - "#endif ! TAU_MPI"
 
 
 procedure_begin_insert:
   - "      integer, save :: tauProfileTimer(2) = [0, 0]"
-  - "      call tau_profile_timer(tauProfileTimer, &"
+  - "      call TAU_PROFILE_TIMER(tauProfileTimer, &"
   - "        \"${full_timer_name}\")"
-  - "      call tau_profile_start(tauProfileTimer)"
+  - "      call TAU_PROFILE_START(tauProfileTimer)"
 
 procedure_end_insert:
-  - "      call tau_profile_stop(tauProfileTimer)"
+  - "      call TAU_PROFILE_STOP(tauProfileTimer)"
