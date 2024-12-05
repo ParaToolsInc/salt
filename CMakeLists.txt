@@ -416,8 +416,9 @@ if(NOT DEFINED ENV{TAU_ROOT})
     get_filename_component(TAU_ROOT ${TAU_EXEC} DIRECTORY) # This will be a bin directory
     get_filename_component(TAU_ROOT ${TAU_ROOT} DIRECTORY) # This might be an arch directory
     string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
-  set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
   endif()
+  else()
+    set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
 endif()
 
 find_file(TAU_CLANG_MAKEFILE 
