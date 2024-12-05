@@ -259,18 +259,12 @@ if(MLIR_FOUND AND Flang_FOUND)
     message(STATUS "FLANG_EXPORTED_TARGETS: ${FLANG_EXPORTED_TARGETS}")
     message(STATUS "FLANG_INCLUDE_DIRS: ${FLANG_INCLUDE_DIRS}")
 
-# Libraries required by Flang plugin
-    set(FLANG_LIBS
-    flangFrontend
-    )
-
 # Interface for Flang frontend plugins
     add_library(SALT_FLANG_FRONTEND INTERFACE)
     target_compile_features(SALT_FLANG_FRONTEND INTERFACE cxx_std_17)
     target_include_directories(SALT_FLANG_FRONTEND INTERFACE ${LLVM_INCLUDE_DIRS} ${FLANG_INCLUDE_DIRS})
     target_compile_definitions(SALT_FLANG_FRONTEND INTERFACE ${LLVM_DEFINITIONS_LIST})
     target_compile_options(SALT_FLANG_FRONTEND INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
-    target_link_libraries(SALT_FLANG_FRONTEND INTERFACE ${FLANG_LIBS})
 
 # Endianness definitions are required, and Flang does not export a definitions list
     include(TestBigEndian)
@@ -297,7 +291,7 @@ if(MLIR_FOUND AND Flang_FOUND)
     target_include_directories(salt-flang-plugin PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include" )
     target_compile_features(salt-flang-plugin PUBLIC cxx_std_17)
     target_link_libraries(salt-flang-plugin PUBLIC SALT_FLANG_FRONTEND)
-    target_link_options(salt-flang-plugin PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
+    target_link_options(salt-flang-plugin PUBLIC -Wl,--as-needed -Wl,-undefined -Wl,dynamic_lookup)
 
     install(TARGETS salt-flang-plugin DESTINATION lib)
 
