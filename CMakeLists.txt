@@ -4,7 +4,7 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 # Ensure policies are set as they have been tested
-cmake_policy(VERSION 3.13.1...3.23.2)
+cmake_policy(VERSION 3.13.1...3.31.2)
 if(POLICY CMP0144)
   cmake_policy(SET CMP0144 NEW)
 endif()
@@ -383,7 +383,7 @@ function(add_instrumentor_test test_src)
   set_tests_properties(${TEST_NAME}_exists
     PROPERTIES
     DEPENDS ${TEST_NAME}
-    PASS_REGULAR_EXPERSSION "TAU_"
+    PASS_REGULAR_EXPRESSION "TAU_"
   )
 endfunction()
 
@@ -404,17 +404,26 @@ endforeach()
 
 # Check if TAU_ROOT is set as an environment variable and if not set it as a CMake cache variable to /usr/local
 # otherwise, use the value from the environment
-if(NOT DEFINED $ENV{TAU_ROOT})
-  set(TAU_ROOT "/usr/local" CACHE PATH "TAU Root Directory")
-else()
+if(NOT DEFINED ENV{TAU_ROOT})
+  find_program(TAU_EXEC tau_exec
+    PATH_SUFFIXES x86_64 x86_64/bin craycnl craycnl/bin apple apple/bin
+  )
+  if(NOT TAU_EXEC)
+    message(FATAL_ERROR "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
+  else()
+    get_filename_component(TAU_ROOT ${TAU_EXEC} DIRECTORY) # This will be a bin directory
+    get_filename_component(TAU_ROOT ${TAU_ROOT} DIRECTORY) # This might be an arch directory
+    string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
   set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
 endif()
 
-find_file(TAU_CLANG_MAKEFILE Makefile.tau-clang-pthread
-PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
+find_file(TAU_CLANG_MAKEFILE 
+  NAMES Makefile.tau-clang-pthread
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
 )
-find_file(TAU_GCC_MAKEFILE Makefile.tau-pthread
-PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
+find_file(TAU_GCC_MAKEFILE
+  NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
 )
 find_program(TAUCC tau_cc.sh
 PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
@@ -431,11 +440,11 @@ set(TAU_HEADER_LOCATIONS
 )
 set(TAU_CLANG_HEADER_LOCATIONS
   -I${TAU_ROOT}/x86_64/libdwarf-clang/include
-  -I${TAU_ROOT}/x86_64/libunwind-1.3.1-clang/include
+  -I${TAU_ROOT}/x86_64/libunwind-1.6.2-clang/include
 )
 set(TAU_GCC_HEADER_LOCATIONS
-  -I${TAU_ROOT}/x86_64/libdwarf-clang/include
-  -I${TAU_ROOT}/x86_64/libunwind-1.3.1-clang/include
+  -I${TAU_ROOT}/x86_64/libdwarf-gcc/include
+  -I${TAU_ROOT}/x86_64/libunwind-1.6.2-gcc/include
 )
 # End of section that note applies to
 ################
