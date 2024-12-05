@@ -21,10 +21,10 @@ limitations under the License.
 
 using namespace Fortran::frontend;
 
-class PrintFunctionNamesAction : public PluginParseTreeAction {
+class SaltInstrumentAction : public PluginParseTreeAction {
 
   // Visitor struct that defines Pre/Post functions for different types of nodes
-  struct ParseTreeVisitor {
+  struct SaltInstrumentParseTreeVisitor {
     template <typename A> bool Pre(const A &) { return true; }
     template <typename A> void Post(const A &) {}
 
@@ -36,7 +36,6 @@ class PrintFunctionNamesAction : public PluginParseTreeAction {
       if (isInSubprogram_) {
         llvm::outs() << "Function:\t"
                      << std::get<Fortran::parser::Name>(f.t).ToString() << "\n";
-        fcounter++;
         isInSubprogram_ = false;
       }
     }
@@ -49,26 +48,23 @@ class PrintFunctionNamesAction : public PluginParseTreeAction {
       if (isInSubprogram_) {
         llvm::outs() << "Subroutine:\t"
                      << std::get<Fortran::parser::Name>(s.t).ToString() << "\n";
-        scounter++;
         isInSubprogram_ = false;
       }
     }
-
-    int fcounter{0};
-    int scounter{0};
 
   private:
     bool isInSubprogram_{false};
   };
 
   void executeAction() override {
-    ParseTreeVisitor visitor;
+    llvm::outs() << "==== SALT Instrumentor Plugin starting ====\n";
+
+    SaltInstrumentParseTreeVisitor visitor;
     Fortran::parser::Walk(getParsing().parseTree(), visitor);
 
-    llvm::outs() << "\n====   Functions: " << visitor.fcounter << " ====\n";
-    llvm::outs() << "==== Subroutines: " << visitor.scounter << " ====\n";
+    llvm::outs() << "==== SALT Instrumentor Plugin finished ====\n";
   }
 };
 
-static FrontendPluginRegistry::Add<PrintFunctionNamesAction> X(
-    "print-fns", "Print Function names");
+static FrontendPluginRegistry::Add<SaltInstrumentAction> X(
+    "salt-instrument", "Apply SALT Instrumentation");
