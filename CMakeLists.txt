@@ -102,6 +102,7 @@ project(SALT
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
+
 # get_cmake_property(_variableNames VARIABLES)
 # list (SORT _variableNames)
 # foreach (_variableName ${_variableNames})
@@ -151,6 +152,8 @@ configure_file(
   "${CMAKE_SOURCE_DIR}/include/clang_header_includes.h.in" "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
   @ONLY)
 
+
+
 #------------------------------------------
 # Specify clang and system libraries needed
 #------------------------------------------
@@ -172,6 +175,7 @@ set(CLANG_LIBS
   clangRewriteFrontend
 )
 
+
 #-----------------------------------------
 # Add an interface library to link against
 #-----------------------------------------
@@ -179,11 +183,12 @@ set(CLANG_LIBS
 # This provides an abstraction and shorthand so that you can just `target_link_libraries()` against
 # the SALT_LLVM_TOOLING interface library
 add_library(SALT_LLVM_TOOLING INTERFACE)
-target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_14)
+target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_17)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
 target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
 target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS})
+
 
 #---------------------------------
 # List the header and source files
@@ -215,6 +220,8 @@ set(CPARSE_LLVM_SRCS
 
 list(TRANSFORM CPARSE_LLVM_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 
+
+
 #---------------------
 # Add the main targets
 #---------------------
@@ -222,13 +229,84 @@ list(TRANSFORM CPARSE_LLVM_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 add_executable(cparse-llvm)
 target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
 target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
-target_compile_features(cparse-llvm PUBLIC cxx_std_14)
+target_compile_features(cparse-llvm PUBLIC cxx_std_17)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
 # You can try adding -static
 target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
 
 # Install the target
 install(TARGETS cparse-llvm DESTINATION bin)
+
+
+#---------------------
+# Flang Frontend library
+#---------------------
+
+# Flang package requires MLIR
+find_package(MLIR CONFIG)
+if(MLIR_FOUND)
+  message(STATUS "Found MLIR -- will check for Flang")
+  find_package(Flang CONFIG)
+else()
+  message(STATUS "MLIR not found -- skipping Flang")
+endif()
+
+if(MLIR_FOUND AND Flang_FOUND)
+    message(STATUS "Found Flang -- will build Flang frontend plugin")
+                
+# Variables set i1n FlangConfig.cmake
+    message(STATUS "FLANG_CMAKE_DIR: ${FLANG_CMAKE_DIR}")
+    message(STATUS "FLANG_EXPORTED_TARGETS: ${FLANG_EXPORTED_TARGETS}")
+    message(STATUS "FLANG_INCLUDE_DIRS: ${FLANG_INCLUDE_DIRS}")
+
+# Libraries required by Flang plugin
+    set(FLANG_LIBS
+    flangFrontend
+    )
+
+# Interface for Flang frontend plugins
+    add_library(SALT_FLANG_FRONTEND INTERFACE)
+    target_compile_features(SALT_FLANG_FRONTEND INTERFACE cxx_std_17)
+    target_include_directories(SALT_FLANG_FRONTEND INTERFACE ${LLVM_INCLUDE_DIRS} ${FLANG_INCLUDE_DIRS})
+    target_compile_definitions(SALT_FLANG_FRONTEND INTERFACE ${LLVM_DEFINITIONS_LIST})
+    target_compile_options(SALT_FLANG_FRONTEND INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
+    target_link_libraries(SALT_FLANG_FRONTEND INTERFACE ${FLANG_LIBS})
+
+# Endianness definitions are required, and Flang does not export a definitions list
+    include(TestBigEndian)
+    test_big_endian(IS_BIGENDIAN)
+    if (IS_BIGENDIAN)
+        target_compile_definitions(SALT_FLANG_FRONTEND INTERFACE FLANG_BIG_ENDIAN=1)
+    else ()
+        target_compile_definitions(SALT_FLANG_FRONTEND INTERFACE FLANG_LITTLE_ENDIAN=1)
+    endif ()
+
+    set(SALT_FLANG_PLUGIN_HEADER_FILES
+    selectfile.hpp
+    tau_datatypes.h
+    )
+    list(TRANSFORM SALT_FLANG_PLUGIN_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
+
+    set(SALT_FLANG_PLUGIN_SRCS
+    PrintFlangFunctionNames.cpp 
+    )
+    list(TRANSFORM SALT_FLANG_PLUGIN_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
+
+    add_library(salt-flang-plugin SHARED)
+    target_sources(salt-flang-plugin PUBLIC ${SALT_FLANG_PLUGIN_SRCS})
+    target_include_directories(salt-flang-plugin PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include" )
+    target_compile_features(salt-flang-plugin PUBLIC cxx_std_17)
+    target_link_libraries(salt-flang-plugin PUBLIC SALT_FLANG_FRONTEND)
+    target_link_options(salt-flang-plugin PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
+
+    install(TARGETS salt-flang-plugin DESTINATION lib)
+
+else()
+    message(STATUS "Flang not found -- skipping Flang frontend plugin")
+endif()
+
+
+
 
 #---------------
 # Tests
