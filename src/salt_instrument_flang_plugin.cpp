@@ -32,6 +32,15 @@ using namespace Fortran::frontend;
  */
 class SaltInstrumentAction : public PluginParseTreeAction {
   struct SaltInstrumentParseTreeVisitor {
+
+    explicit SaltInstrumentParseTreeVisitor(Fortran::parser::Parsing *parsing)
+      : parsing(parsing) {
+    }
+
+    // Pass in the parser object from the Action to the Visitor
+    // so that we can use it while processing parse tree nodes.
+    Fortran::parser::Parsing *parsing{nullptr};
+
     // Default empty visit functions for otherwise unhandled types.
     template <typename A> bool Pre(const A &) { return true; }
     template <typename A> void Post(const A &) {}
@@ -52,9 +61,15 @@ class SaltInstrumentAction : public PluginParseTreeAction {
       return true;
     }
 
+    // See https://github.com/llvm/llvm-project/blob/main/flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
+    // for examples of getting source position for a parse tree node
     void Post(const Fortran::parser::ProgramStmt & program) {
+      const auto & pos = parsing->allCooked().GetSourcePositionRange(program.v.source);
       llvm::outs() << "Program: \t"
-                   <<  program.v.ToString() << "\n";
+                   <<  program.v.ToString()
+                   << "\t (" << pos->first.line << ", " << pos->first.column << ")"
+                   << "\t (" << pos->second.line << ", " << pos->second.column << ")"
+                   << "\n";
     }
 
     void Post(const Fortran::parser::FunctionStmt &f) {
@@ -84,8 +99,9 @@ class SaltInstrumentAction : public PluginParseTreeAction {
   void executeAction() override {
     llvm::outs() << "==== SALT Instrumentor Plugin starting ====\n";
 
-    SaltInstrumentParseTreeVisitor visitor;
-    Fortran::parser::Walk(getParsing().parseTree(), visitor);
+    Fortran::parser::Parsing & parsing = getParsing();
+    SaltInstrumentParseTreeVisitor visitor{&parsing};
+    Fortran::parser::Walk(parsing.parseTree(), visitor);
 
     llvm::outs() << "==== SALT Instrumentor Plugin finished ====\n";
   }
