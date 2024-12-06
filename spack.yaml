@@ -58,6 +58,5 @@ spack:
 
   specs:
   - llvm@git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9=19.1.4 +flang +mlir openmp=project
-  #  -   tau@master%gcc@14.2.0~adios2+binutils~comm~craycnl~cuda~disable-no-pie~dyninst+elf+fortran~gasnet+io~level_zero+libdwarf+libunwind+mpi~ompt~opari~opencl+openmp+otf2+papi+pdt~phase~ppc64le~profileparam+pthreads~python~rocm~rocprofiler~rocprofv2~roctracer~scorep~shmem~sqlite~syscall~x86_64 build_system=generic arch=linux-rhel8-x86_64
-  - tau@master +mpi +openmp cflags=-Wno-error=implicit-function-declaration
   - mpich ~wrapperrpath
+  
