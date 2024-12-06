@@ -301,6 +301,45 @@ else()
     message(STATUS "Flang not found -- skipping Flang frontend plugin")
 endif()
 
+# Check if TAU_ROOT is set as an environment variable and if not set it as a CMake cache variable to /usr/local
+# otherwise, use the value from the environment
+if(NOT DEFINED ENV{TAU_ROOT})
+  find_program(TAU_EXEC tau_exec
+    PATH_SUFFIXES x86_64 x86_64/bin craycnl craycnl/bin apple apple/bin
+  )
+  if(NOT TAU_EXEC)
+    message(FATAL_ERROR "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
+  else()
+    get_filename_component(TAU_ROOT ${TAU_EXEC} DIRECTORY) # This will be a bin directory
+    get_filename_component(TAU_ROOT ${TAU_ROOT} DIRECTORY) # This might be an arch directory
+    string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
+  endif()
+  else()
+    set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
+endif()
+
+find_file(TAU_CLANG_MAKEFILE
+  NAMES Makefile.tau-clang-pthread
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
+  REQUIRED
+)
+find_file(TAU_GCC_MAKEFILE
+  NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
+  REQUIRED
+)
+find_program(TAUCC tau_cc.sh
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
+  REQUIRED
+)
+find_program(TAUCXX tau_cxx.sh
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
+  REQUIRED
+)
+find_program(TAU_EXEC tau_exec
+  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
+  REQUIRED
+)
 
 
 
@@ -404,40 +443,6 @@ endforeach()
 # and -pthread -bfd=download -unwind=download -libdwarf=download 
 # -otf=download
 
-# Check if TAU_ROOT is set as an environment variable and if not set it as a CMake cache variable to /usr/local
-# otherwise, use the value from the environment
-if(NOT DEFINED ENV{TAU_ROOT})
-  find_program(TAU_EXEC tau_exec
-    PATH_SUFFIXES x86_64 x86_64/bin craycnl craycnl/bin apple apple/bin
-  )
-  if(NOT TAU_EXEC)
-    message(FATAL_ERROR "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
-  else()
-    get_filename_component(TAU_ROOT ${TAU_EXEC} DIRECTORY) # This will be a bin directory
-    get_filename_component(TAU_ROOT ${TAU_ROOT} DIRECTORY) # This might be an arch directory
-    string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
-  endif()
-  else()
-    set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
-endif()
-
-find_file(TAU_CLANG_MAKEFILE 
-  NAMES Makefile.tau-clang-pthread
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
-)
-find_file(TAU_GCC_MAKEFILE
-  NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
-)
-find_program(TAUCC tau_cc.sh
-PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
-)
-find_program(TAUCXX tau_cxx.sh
-PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
-)
-find_program(TAU_EXEC tau_exec
-PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
-)
 
 set(TAU_HEADER_LOCATIONS
   -I${TAU_ROOT}/include
@@ -516,9 +521,9 @@ function(compile_instrumented test_src)
   endif()
 
   if(${TEST_LANG} STREQUAL "c")
-    set(TAUC tau_cc.sh)
+    set(TAUC ${TAUCXX})
   elseif(${TEST_LANG} STREQUAL "cpp")
-    set(TAUC tau_cxx.sh)
+    set(TAUC ${TAUCC})
   else()
     message( FATAL_ERROR "Unknown test source file extension: ${TEST_LANG}")
   endif()
