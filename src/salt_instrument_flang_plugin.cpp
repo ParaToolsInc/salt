@@ -46,9 +46,11 @@ class SaltInstrumentAction : public PluginParseTreeAction {
     template <typename A> void Post(const A &) {}
 
     // Override all types that we want to visit.
+
     // Pre occurs when first visiting a node.
     // Post occurs when returning from the node's children.
     // See https://flang.llvm.org/docs/Parsing.html for information on the parse tree.
+
     // Parse tree types are defined in: include/flang/Parser/parse-tree.h
     // There are three types of parse tree nodes:
     // Wrappers, with a single data member, always named `v`.
@@ -56,17 +58,30 @@ class SaltInstrumentAction : public PluginParseTreeAction {
     // Discriminated unions, one of several types stored in data member named `u` of type std::variant.
     // Use std::get() to retrieve value from `t` or `u`
 
+    // See https://github.com/llvm/llvm-project/blob/main/flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
+    // for examples of getting source position for a parse tree node
+
+    bool Pre(const Fortran::parser::MainProgram &) {
+      llvm::outs() << "Entering main program\n";
+      isInMainProgram_ = true;
+      return true;
+    }
+
+    void Post(const Fortran::parser::MainProgram & ) {
+      llvm::outs() << "Exiting main program: " << mainProgramName_ << "\n";
+      isInMainProgram_ = false;
+    }
+
     bool Pre(const Fortran::parser::FunctionSubprogram &) {
       isInSubprogram_ = true;
       return true;
     }
 
-    // See https://github.com/llvm/llvm-project/blob/main/flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
-    // for examples of getting source position for a parse tree node
     void Post(const Fortran::parser::ProgramStmt & program) {
+      mainProgramName_ = program.v.ToString();
       const auto & pos = parsing->allCooked().GetSourcePositionRange(program.v.source);
       llvm::outs() << "Program: \t"
-                   <<  program.v.ToString()
+                   <<  mainProgramName_
                    << "\t (" << pos->first.line << ", " << pos->first.column << ")"
                    << "\t (" << pos->second.line << ", " << pos->second.column << ")"
                    << "\n";
@@ -94,6 +109,8 @@ class SaltInstrumentAction : public PluginParseTreeAction {
 
   private:
     bool isInSubprogram_{false};
+    bool isInMainProgram_{false};
+    std::string mainProgramName_;
   };
 
   void executeAction() override {
