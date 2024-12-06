@@ -5,7 +5,7 @@
 
 set -o errexit
 set -o nounset
-set -o pipefile
+set -o pipefail
 set -o verbose
 
 cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
