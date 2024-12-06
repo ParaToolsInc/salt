@@ -256,7 +256,7 @@ endif()
 if(MLIR_FOUND AND Flang_FOUND)
     message(STATUS "Found Flang -- will build Flang frontend plugin")
                 
-# Variables set i1n FlangConfig.cmake
+# Variables set in FlangConfig.cmake
     message(STATUS "FLANG_CMAKE_DIR: ${FLANG_CMAKE_DIR}")
     message(STATUS "FLANG_EXPORTED_TARGETS: ${FLANG_EXPORTED_TARGETS}")
     message(STATUS "FLANG_INCLUDE_DIRS: ${FLANG_INCLUDE_DIRS}")
