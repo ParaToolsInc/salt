@@ -16,6 +16,9 @@ limitations under the License.
 
 /* SALT-FM Flang Fortran Instrumentor Plugin */
 
+// See https://flang.llvm.org/docs/FlangDriver.html#frontend-driver-plugins
+// for documentation of the Flang frontend plugin interface
+
 #include "flang/Frontend/FrontendActions.h"
 #include "flang/Frontend/FrontendPluginRegistry.h"
 #include "flang/Parser/dump-parse-tree.h"
@@ -37,6 +40,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
     // Pre occurs when first visiting a node.
     // Post occurs when returning from the node's children.
     // See https://flang.llvm.org/docs/Parsing.html for information on the parse tree.
+    // Parse tree types are defined in: include/flang/Parser/parse-tree.h
     // There are three types of parse tree nodes:
     // Wrappers, with a single data member, always named `v`.
     // Tuples, encapsulating multiple values in a data member named `t` of type std::tuple.
