@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Sourec this file on UO machines to setup your SALT-FM development environment
+# `source activate-salt-fm-env.sh`
+# After this you can quickly configure, build, and test using `./build_and_test.sh`
+
 export SALT_ROOT=/storage/packages/salt-fm
 export PATH="$SALT_ROOT/base/tools/bin:$PATH"
 export PATH="$SALT_ROOT/opt/tau/x86_64/bin:$PATH"
