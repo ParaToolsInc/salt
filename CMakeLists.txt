@@ -53,12 +53,12 @@ check_out_of_source_build()
 # SALT project version
 # Later we can get this from `git describe`
 set (SALT_VERSION_MAJOR 0)
-set (SALT_VERSION_MINOR 1)
+set (SALT_VERSION_MINOR 2)
 
 # Print project logo, version and tag line
 file(READ ${CMAKE_CURRENT_LIST_DIR}/cmake/SALT-logo.txt SALT_LOGO)
 string(JOIN "\n         " SALT_GREETING "${SALT_LOGO}"
-  "SALT, v${SALT_VERSION_MAJOR}.${SALT_VERSION_MINOR}: An LLVM-based Source Analysis Toolkit for HPC")
+  "SALT-FM, v${SALT_VERSION_MAJOR}.${SALT_VERSION_MINOR}: An LLVM-based Source Analysis Toolkit for HPC")
 if(NOT isMultiConfig)
   string(APPEND SALT_GREETING "\n         Build type: ${CMAKE_BUILD_TYPE}")
 endif()
