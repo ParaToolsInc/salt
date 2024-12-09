@@ -554,7 +554,7 @@ function(compile_instrumented test_src)
       ENVIRONMENT TAU_MAKEFILE=${TAU_${comp}_MAKEFILE}
       FIXTURES_REQUIRED clean_${lower_comp}_${TEST_NAME}_objects
       DEPENDS ${depends_on}
-      FAIL_REGULAR_EXPRESSION "[Dd]isabling instrumentation of source code;[Ss]witching to compiler-based instrumentation;[Cc]ompiling with [Nn]on-[Ii]nstrumented [Rr]egular [Cc]ode"
+      FAIL_REGULAR_EXPRESSION "[Dd]isabling instrumentation of source code;[Ss]witching to compiler-based instrumentation;[Cc]ompiling with [Nn]on-[Ii]nstrumented [Rr]egular [Cc]ode;[Ee]rror:"
     )
     add_test(NAME rm_old_${lower_comp}_${TEST_NAME}_profiles
       COMMAND
