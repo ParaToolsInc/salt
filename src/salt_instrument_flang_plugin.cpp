@@ -99,36 +99,63 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         // for examples of getting source position for a parse tree node
 
         bool Pre(const Fortran::parser::MainProgram &) {
-            llvm::outs() << "Entering main program\n";
             isInMainProgram_ = true;
             return true;
         }
 
         void Post(const Fortran::parser::MainProgram &) {
-            llvm::outs() << "Exiting main program: " << mainProgramName_ << "\n";
+            llvm::outs() << "Exit main program: " << mainProgramName_ << "\n";
             isInMainProgram_ = false;
         }
 
         void Post(const Fortran::parser::ProgramStmt &program) {
             mainProgramName_ = program.v.ToString();
-            const auto &pos = parsing->allCooked().GetSourcePositionRange(program.v.source);
-            llvm::outs() << "Program: \t"
-                    << mainProgramName_
-                    << "\t (" << pos->first.line << ", " << pos->first.column << ")"
-                    << "\t (" << pos->second.line << ", " << pos->second.column << ")"
-                    << "\n";
+            //const auto &pos = parsing->allCooked().GetSourcePositionRange(program.v.source);
+            llvm::outs() << "Enter main program: " << mainProgramName_ << "\n";
         }
+
+        bool Pre(const Fortran::parser::SubroutineStmt &subroutineStmt) {
+            subprogramName_ = std::get<Fortran::parser::Name>(subroutineStmt.t).ToString();
+            llvm::outs() << "Enter Subroutine: " << subprogramName_ << "\n";
+            return true;
+        }
+
+        void Post(const Fortran::parser::SubroutineSubprogram &) {
+            llvm::outs() << "Exit Subroutine: " << subprogramName_ << "\n";
+            subprogramName_.clear();
+        }
+
+        bool Pre(const Fortran::parser::FunctionStmt &functionStmt) {
+            subprogramName_ = std::get<Fortran::parser::Name>(functionStmt.t).ToString();
+            llvm::outs() << "Enter Function: " << subprogramName_ << "\n";
+            return true;
+        }
+
+        void Post(const Fortran::parser::FunctionSubprogram &) {
+            llvm::outs() << "Exit Function: " << subprogramName_ << "\n";
+            subprogramName_.clear();
+        }
+
+        bool Pre(const Fortran::parser::ExecutionPart & executionPart) {
+            (void)executionPart; // TODO handle execution part
+            // Need to get the FIRST and the LAST components
+            // Insert timer start before first component
+            // Insert timer end after last component
+            return true;
+        }
+
 
     private:
         // Keeps track of current state of traversal
         bool isInMainProgram_{false};
         std::string mainProgramName_;
+        std::string subprogramName_;
 
         std::vector<SaltInstrumentationPoint> instrumentationPoints_;
 
         // Pass in the parser object from the Action to the Visitor
         // so that we can use it while processing parse tree nodes.
-        Fortran::parser::Parsing *parsing{nullptr};
+        [[maybe_unused]] Fortran::parser::Parsing *parsing{nullptr};
     };
 
     /**
