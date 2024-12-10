@@ -83,7 +83,7 @@ set(CMAKE_CXX_STANDARD 17)
 #-----------------------------
 # Create the main SALT project
 #-----------------------------
-project(SALT
+project(SALT-FM
   VERSION "${SALT_VERSION_MAJOR}.${SALT_VERSION_MINOR}"
   DESCRIPTION "An LLVM-based Source Analysis Tookit for HPC"
   HOMEPAGE_URL "https://github.com/ParaToolsInc/salt"
@@ -190,7 +190,6 @@ target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
 target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
 target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS})
-
 
 #---------------------------------
 # List the header and source files
@@ -301,11 +300,16 @@ else()
     message(STATUS "Flang not found -- skipping Flang frontend plugin")
 endif()
 
+#---------------------
+# Find TAU locations for testing
+#---------------------
+
 # Check if TAU_ROOT is set as an environment variable and if not set it as a CMake cache variable to /usr/local
 # otherwise, use the value from the environment
+set(TAU_PATH_SUFFIXES x86_64 x86_64/bin craycnl craycnl/bin apple apple/bin)
 if(NOT DEFINED ENV{TAU_ROOT})
   find_program(TAU_EXEC tau_exec
-    PATH_SUFFIXES x86_64 x86_64/bin craycnl craycnl/bin apple apple/bin
+    PATH_SUFFIXES ${TAU_PATH_SUFFIXES}
   )
   if(NOT TAU_EXEC)
     message(FATAL_ERROR "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
@@ -318,30 +322,64 @@ if(NOT DEFINED ENV{TAU_ROOT})
     set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
 endif()
 
+# Find the TAU makefiles, executables, scripts, libraries, etc.
+message(STATUS "TAU_ROOT: ${TAU_ROOT}")
+
+find_program(TAU_EXEC tau_exec
+  PATHS ${TAU_ROOT}/x86_64 ${TAU_ROOT}/apple ${TAU_ROOT}/craycnl
+  PATH_SUFFIXES bin
+  REQUIRED
+)
+get_filename_component(TAU_ARCH_DIR ${TAU_EXEC} DIRECTORY)
+get_filename_component(TAU_ARCH_DIR ${TAU_ARCH_DIR} DIRECTORY)
+message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
+
 find_file(TAU_CLANG_MAKEFILE
   NAMES Makefile.tau-clang-pthread
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
+  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
   REQUIRED
 )
 find_file(TAU_GCC_MAKEFILE
   NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/lib
+  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
   REQUIRED
 )
 find_program(TAUCC tau_cc.sh
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
+  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
   REQUIRED
 )
 find_program(TAUCXX tau_cxx.sh
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
+  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
   REQUIRED
 )
-find_program(TAU_EXEC tau_exec
-  PATHS ${TAU_ROOT}  PATH_SUFFIXES x86_64 x86_64/bin
+file(GLOB TAU_GCC_LIBUNWIND_DIR ${TAU_ARCH_DIR}/libunwind-*-gcc)
+if(NOT TAU_GCC_LIBUNWIND_DIR)
+  message(FATAL_ERROR "libunwind not found for TAU's gcc build")
+endif()
+find_path(TAU_GCC_LIBUNWIND_INCLUDE_DIR
+  NAMES include
+  PATHS ${TAU_GCC_LIBUNWIND_DIR}
   REQUIRED
 )
-
-
+file(GLOB TAU_CLANG_LIBUNWIND_DIR ${TAU_ARCH_DIR}/libunwind-*-clang)
+if(NOT TAU_CLANG_LIBUNWIND_DIR)
+  message(FATAL_ERROR "libunwind not found for TAU's clang build")
+endif()
+find_path(TAU_CLANG_LIBUNWIND_INCLUDE_DIR
+  NAMES include
+  PATHS ${TAU_CLANG_LIBUNWIND_DIR}
+  REQUIRED
+)
+find_path(TAU_GCC_LIBDWARF_INCLUDE_DIR
+  NAMES include
+  PATHS ${TAU_ARCH_DIR}/libdwarf-gcc
+  REQUIRED
+)
+find_path(TAU_CLANG_LIBDWARF_INCLUDE_DIR
+  NAMES include
+  PATHS ${TAU_ARCH_DIR}/libdwarf-clang
+  REQUIRED
+)
 
 #---------------
 # Tests
@@ -448,12 +486,12 @@ set(TAU_HEADER_LOCATIONS
   -I${TAU_ROOT}/include
 )
 set(TAU_CLANG_HEADER_LOCATIONS
-  -I${TAU_ROOT}/x86_64/libdwarf-clang/include
-  -I${TAU_ROOT}/x86_64/libunwind-1.6.2-clang/include
+  -I${TAU_CLANG_LIBDWARF_INCLUDE_DIR}
+  -I${TAU_CLANG_LIBUNWIND_INCLUDE_DIR}
 )
 set(TAU_GCC_HEADER_LOCATIONS
-  -I${TAU_ROOT}/x86_64/libdwarf-gcc/include
-  -I${TAU_ROOT}/x86_64/libunwind-1.6.2-gcc/include
+  -I${TAU_GCC_LIBDWARF_INCLUDE_DIR}
+  -I${TAU_GCC_LIBUNWIND_INCLUDE_DIR}
 )
 # End of section that note applies to
 ################
