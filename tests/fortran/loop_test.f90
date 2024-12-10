@@ -15,19 +15,19 @@ subroutine foo(iVal)
           end do
         end do
 
-        do 10, i = 1, 3
-        call bar(i+iVal)
-10      continue
+        do i = 1, 3
+          call bar(i+iVal)
+        end do
         print *, "after calling bar in foo"
-      end
+end subroutine foo
 
 program main
   integer i
 
   print *, "test program"
 
-  do 10, i = 1, 3
+  do i = 1, 3
     call foo(i)
-10  continue
+  end do
 end program main
 
