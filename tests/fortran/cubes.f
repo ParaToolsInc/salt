@@ -1,15 +1,15 @@
-cc34567 Cubes program
-      PROGRAM SUM_OF_CUBES 
-      INTEGER :: H, T, U 
-      ! This program prints all 3-digit numbers that 
+      program sum_of_cubes 
+      implicit none
+      integer :: h, t, u 
+      ! this program prints all 3-digit numbers that 
       ! equal the sum of the cubes of their digits. 
-      DO H = 1, 9 
-        DO T = 0, 9 
-          DO U = 0, 9 
-          IF (100*H + 10*T + U == H**3 + T**3 + U**3) THEN
-             PRINT "(3I1)", H, T, U 
-	  ENDIF
-          END DO 
-        END DO 
-      END DO 
-      END PROGRAM SUM_OF_CUBES
+      do h = 1, 9 
+        do t = 0, 9 
+          do u = 0, 9 
+          if (100*h + 10*t + u == h**3 + t**3 + u**3) then
+             print "(3I1)", h, t, u 
+	        endif
+          end do 
+        end do 
+      end do 
+      end program sum_of_cubes

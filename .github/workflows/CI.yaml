@@ -23,4 +23,4 @@ jobs:
           echo "Cores: $(nproc) "
           cmake --build build --parallel $(nproc) || cmake --build build --verbose
       - name: Run Tests
-        run: cd build && ctest --output-on-failure
+        run: cd build && ctest -j --output-on-failure || ctest --rerun-failed --verbose
