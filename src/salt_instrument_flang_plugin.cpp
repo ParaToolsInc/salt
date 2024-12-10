@@ -74,16 +74,6 @@ class SaltInstrumentAction : public PluginParseTreeAction {
             return instrumentationPoints_;
         }
 
-        void setInputFileNameIfNeeded(const std::string &inputName) {
-            if (inputFileName_.empty()) {
-                inputFileName_ = inputName;
-            }
-        }
-
-         std::string getInputFileName() {
-            return inputFileName_;
-        }
-
         // Default empty visit functions for otherwise unhandled types.
         template<typename A>
         static bool Pre(const A &) { return true; }
@@ -122,10 +112,8 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         void Post(const Fortran::parser::ProgramStmt &program) {
             mainProgramName_ = program.v.ToString();
             const auto &pos = parsing->allCooked().GetSourcePositionRange(program.v.source);
-            setInputFileNameIfNeeded(pos->first.sourceFile->path());
             llvm::outs() << "Program: \t"
                     << mainProgramName_
-                    << "\t" << inputFileName_
                     << "\t (" << pos->first.line << ", " << pos->first.column << ")"
                     << "\t (" << pos->second.line << ", " << pos->second.column << ")"
                     << "\n";
@@ -133,8 +121,6 @@ class SaltInstrumentAction : public PluginParseTreeAction {
 
         void Post(const Fortran::parser::FunctionStmt &f) {
             auto &name = std::get<Fortran::parser::Name>(f.t);
-            setInputFileNameIfNeeded(
-                parsing->allCooked().GetSourcePositionRange(name.source)->first.sourceFile->path());
             if (isInSubprogram_) {
                 llvm::outs() << "Function:\t"
                         << name.ToString() << "\n";
@@ -154,8 +140,6 @@ class SaltInstrumentAction : public PluginParseTreeAction {
 
         void Post(const Fortran::parser::SubroutineStmt &s) {
             auto &name = std::get<Fortran::parser::Name>(s.t);
-            setInputFileNameIfNeeded(
-                parsing->allCooked().GetSourcePositionRange(name.source)->first.sourceFile->path());
             if (isInSubprogram_) {
                 llvm::outs() << "Subroutine:\t"
                         << name.ToString() << "\n";
@@ -163,9 +147,8 @@ class SaltInstrumentAction : public PluginParseTreeAction {
             }
         }
 
-        void Post(const Fortran::parser::EndProgramStmt & endProgram) {
-            setInputFileNameIfNeeded(
-                parsing->allCooked().GetSourcePositionRange(endProgram.v->source)->first.sourceFile->path());
+        void Post(const Fortran::parser::EndProgramStmt &endProgram) {
+            (void) endProgram; //TODO handle endprogram
         }
 
     private:
@@ -173,7 +156,6 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         bool isInSubprogram_{false};
         bool isInMainProgram_{false};
         std::string mainProgramName_;
-        std::string inputFileName_;
 
         std::vector<SaltInstrumentationPoint> instrumentationPoints_;
 
@@ -182,23 +164,60 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         Fortran::parser::Parsing *parsing{nullptr};
     };
 
+    /**
+     * Get the source file represented by a given parse tree
+     *
+     * See function BuildRuntimeDerivedTypeTables() in
+     * flang/lib/Semantics/runtime-type-info.cpp for example
+     * of getting the source file name.
+     */
+    static std::optional<std::string> getInputFilePath(Fortran::parser::Parsing &parsing) {
+        const auto &allSources{parsing.allCooked().allSources()};
+        if (auto firstProv{allSources.GetFirstFileProvenance()}) {
+            if (const auto *srcFile{allSources.GetSourceFile(firstProv->start())}) {
+                return srcFile->path();
+            }
+        }
+        return std::nullopt;
+    }
+
+
+    /**
+     * This is the entry point for the plugin.
+     */
     void executeAction() override {
         llvm::outs() << "==== SALT Instrumentor Plugin starting ====\n";
 
+        // This is the object through which we access the parse tree
+        // and the source
         Fortran::parser::Parsing &parsing = getParsing();
-        parsing.parseTree()
-        // TODO figure out the actual extension of the input and reuse in extension of output file
-        // currently we just use inst.f always
+
+        // Get the path to the input file
+        const auto inputFilePath = getInputFilePath(parsing);
+        if (!inputFilePath) {
+            llvm::outs() << "ERROR: Unable to find input file name!\n";
+            std::exit(-1);
+        }
+        llvm::outs() << "Have input file: " << *inputFilePath << "\n";
+
+        // Get the extension of the input file
+        // For input file 'filename.ext' we will output to 'filename.inst.ext'
+        std::string inputFileExtension;
+        if (auto const extPos = inputFilePath->find_last_of('.'); extPos == std::string::npos) {
+            inputFileExtension = "f90"; // Default if for some reason file has no extension
+        } else {
+            inputFileExtension = inputFilePath->substr(extPos + 1); // Part of string past last '.'
+        }
+
+        // Open an output file for writing the instrumented code
+        const std::string outputFileExtension = "inst."s + inputFileExtension;
+        auto outputFile = createOutputFile(outputFileExtension);
+
+        // Walk the parse tree
         SaltInstrumentParseTreeVisitor visitor{&parsing};
         Walk(parsing.parseTree(), visitor);
 
-        const std::string inputFile = visitor.getInputFileName();
-        llvm::outs() << "File: " << inputFile << "\n";
-        auto const extPos = inputFile.find_last_of('.');
-        const auto inputFileExt = inputFile.substr(extPos + 1);
-        llvm::outs() << inputFileExt << "\n";
-
-        auto outputFile = createOutputFile("inst.f");
+        // TODO write the instrumented code
 
         llvm::outs() << "==== SALT Instrumentor Plugin finished ====\n";
     }
