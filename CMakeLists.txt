@@ -470,67 +470,13 @@ foreach(test_source IN LISTS TESTS_LIST)
   add_instrumentor_test(${test_source})
 endforeach()
 
-
-################
-# The following default paths are fragile and somewhat specific to
-# the salt-dev container.
-# For alternative TAU installs add -DTAU_ROOT=<dir> to the
-# cmake invication. Make sure TAU is built with these
-# configurations:  -pthread -cc=clang -c++=clang++ -bfd=download 
-# -unwind=download -dwarf=download -otf=download
-# and -pthread -bfd=download -unwind=download -libdwarf=download 
-# -otf=download
-
-
-set(TAU_HEADER_LOCATIONS
-  -I${TAU_ROOT}/include
-)
-set(TAU_CLANG_HEADER_LOCATIONS
-  -I${TAU_CLANG_LIBDWARF_INCLUDE_DIR}
-  -I${TAU_CLANG_LIBUNWIND_INCLUDE_DIR}
-)
-set(TAU_GCC_HEADER_LOCATIONS
-  -I${TAU_GCC_LIBDWARF_INCLUDE_DIR}
-  -I${TAU_GCC_LIBUNWIND_INCLUDE_DIR}
-)
-# End of section that note applies to
-################
-
-
-set(TAU_COMPILE_OPTIONS -fPIC -g)
-set(TAU_C_DEFINITIONS
-  -DEBS_CLOCK_RES=1
-  -DHAVE_GNU_DEMANGLE
-  -DHAVE_TR1_HASH_MAP
-  -DPROFILING_ON
-  -DPTHREADS
-  -DTAU_BFD
-  -DTAU_DOT_H_LESS_HEADERS
-  -DTAU_DWARF
-  -DTAU_ELF_BFD
-  -DTAU_LARGEFILE
-  -DTAU_LINUX_TIMERS
-  -DTAU_OTF2
-  -DTAU_NO_FORTRAN
-  -DTAU_PTHREAD_PRELOAD
-  -DTAU_SS_ALLOC_SUPPORT
-  -DTAU_STRSIGNAL_OK
-  -DTAU_TRACK_LD_LOADER
-  -DTAU_UNIFY
-  -DTAU_UNWIND
-  -DTAU_USE_LIBUNWIND
-  -DTAU_USE_TLS
-  -D_LARGEFILE64_SOURCE
-  # -Dpthread_create=tau_pthread_create
-  # -Dpthread_exit=tau_pthread_exit
-)
-
-set(TAU_C_CLANG_DEFINITIONS
-  -DTAU_CLANG
-)
-set(TAU_C_GCC_DEFINITIONS
-  -DTAU_GNU
-)
+set(compilers_to_test gcc clang)
+foreach(comp IN LISTS compilers_to_test)
+  set(lower_comp ${comp})
+  string(TOUPPER ${comp} comp)
+  add_test(NAME setup_${comp}_dir
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${comp})
+endforeach()
 
 function(compile_instrumented test_src)
   # This is the 2nd of 2 functions for adding tests.
@@ -542,7 +488,7 @@ function(compile_instrumented test_src)
   get_filename_component(TEST_BASE_NAME ${test_src} NAME_WE)
   set(TEST_NAME "${TEST_BASE_NAME}")
   # This next line depends on the previous function implementation
-  set(depends_on instrument_${TEST_BASE_NAME})
+  set(depends_on instrument_${TEST_BASE_NAME}) # Right now this is just to prevent tests from running at the same time from clobbering the instrumented source file
   get_filename_component(TEST_LANG ${test_src} LAST_EXT)
   string(REPLACE "." "" TEST_LANG ${TEST_LANG})
   set(extra_args ${ARGN})
@@ -566,26 +512,28 @@ function(compile_instrumented test_src)
     message( FATAL_ERROR "Unknown test source file extension: ${TEST_LANG}")
   endif()
 
-  set(test_path ${TEST_BASE_NAME}.inst.${TEST_LANG})
-  set(TAUC_OPTS -optVerbose -optLinkOnly -optNoMpi)
+  set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
+  set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=$<TARGET_FILE:cparse-llvm> -optSaltConfigFile=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml)
   set(compile_opts ${TAU_COMPILE_OPTIONS})
-  set(compilers_to_test gcc clang)
   foreach(comp IN LISTS compilers_to_test)
     set(lower_comp ${comp})
     string(TOUPPER ${comp} comp)
-    set(defs ${TAU_C_DEFINITIONS} ${TAU_C_${comp}_DEFINITIONS})
-    set(includes ${TAU_HEADER_LOCATIONS} ${TAU_${comp}_HEADER_LOCATIONS})
+    # Fixture to cleanup old instrumented source, object files, and executables
     add_test(NAME rm_${lower_comp}_${TEST_NAME}_objects
       COMMAND
-      ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.o ${TEST_BASE_NAME}.inst.o
+      ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.o ${TEST_BASE_NAME}.inst.o ${TEST_BASE_NAME}.inst.${TEST_LANG}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(rm_${lower_comp}_${TEST_NAME}_objects
       PROPERTIES
       FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_objects
+      DEPENDS setup_${comp}_dir
     )
+    # Test to actually instrument and build the test source using TAU compiler wrappers & slat parser
     add_test(NAME compile_${lower_comp}_${TEST_NAME}
       COMMAND
-      ${TAUC} ${TAUC_OPTS} ${includes} ${defs} ${compiler_opts} -o ${TEST_BASE_NAME}.${lower_comp} ${test_path}
+      ${TAUC} ${TAUC_OPTS} ${compiler_opts} -o ${TEST_BASE_NAME}.${lower_comp} ${test_path}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${lower_comp}
     )
     set_tests_properties(compile_${lower_comp}_${TEST_NAME}
       PROPERTIES
@@ -594,17 +542,22 @@ function(compile_instrumented test_src)
       DEPENDS ${depends_on}
       FAIL_REGULAR_EXPRESSION "[Dd]isabling instrumentation of source code;[Ss]witching to compiler-based instrumentation;[Cc]ompiling with [Nn]on-[Ii]nstrumented [Rr]egular [Cc]ode;[Ee]rror:"
     )
+    # Fixture to cleanup old profile directories
     add_test(NAME rm_old_${lower_comp}_${TEST_NAME}_profiles
       COMMAND
       ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.${lower_comp}.d
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(rm_old_${lower_comp}_${TEST_NAME}_profiles
       PROPERTIES
       FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
+      DEPENDS setup_${comp}_dir
     )
+    # Profile w/ TAU and Verify profiles are created
     add_test(NAME run_${lower_comp}_${TEST_NAME}
       COMMAND
       ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}.${lower_comp}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(run_${lower_comp}_${TEST_NAME}
       PROPERTIES
@@ -615,6 +568,7 @@ function(compile_instrumented test_src)
     )
     add_test(NAME check_${lower_comp}_${TEST_NAME}_profile
       COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.${lower_comp}.d/profile.0.0.0
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(check_${lower_comp}_${TEST_NAME}_profile
       PROPERTIES
