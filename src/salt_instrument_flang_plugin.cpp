@@ -119,41 +119,8 @@ class SaltInstrumentAction : public PluginParseTreeAction {
                     << "\n";
         }
 
-        void Post(const Fortran::parser::FunctionStmt &f) {
-            auto &name = std::get<Fortran::parser::Name>(f.t);
-            if (isInSubprogram_) {
-                llvm::outs() << "Function:\t"
-                        << name.ToString() << "\n";
-                isInSubprogram_ = false;
-            }
-        }
-
-        bool Pre(const Fortran::parser::FunctionSubprogram &) {
-            isInSubprogram_ = true;
-            return true;
-        }
-
-        bool Pre(const Fortran::parser::SubroutineSubprogram &) {
-            isInSubprogram_ = true;
-            return true;
-        }
-
-        void Post(const Fortran::parser::SubroutineStmt &s) {
-            auto &name = std::get<Fortran::parser::Name>(s.t);
-            if (isInSubprogram_) {
-                llvm::outs() << "Subroutine:\t"
-                        << name.ToString() << "\n";
-                isInSubprogram_ = false;
-            }
-        }
-
-        void Post(const Fortran::parser::EndProgramStmt &endProgram) {
-            (void) endProgram; //TODO handle endprogram
-        }
-
     private:
         // Keeps track of current state of traversal
-        bool isInSubprogram_{false};
         bool isInMainProgram_{false};
         std::string mainProgramName_;
 
