@@ -533,7 +533,7 @@ function(compile_instrumented test_src)
     add_test(NAME compile_${lower_comp}_${TEST_NAME}
       COMMAND
       ${TAUC} ${TAUC_OPTS} ${compiler_opts} -o ${TEST_BASE_NAME}.${lower_comp} ${test_path}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${lower_comp}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(compile_${lower_comp}_${TEST_NAME}
       PROPERTIES
