@@ -19,10 +19,14 @@ limitations under the License.
 // See https://flang.llvm.org/docs/FlangDriver.html#frontend-driver-plugins
 // for documentation of the Flang frontend plugin interface
 
+#include <clang/Basic/SourceLocation.h>
+
 #include "flang/Frontend/FrontendActions.h"
 #include "flang/Frontend/FrontendPluginRegistry.h"
 #include "flang/Parser/dump-parse-tree.h"
 #include "flang/Parser/parsing.h"
+#include "flang/Parser/source.h"
+#include "flang/Common/indirection.h"
 
 using namespace Fortran::frontend;
 
@@ -72,6 +76,10 @@ class SaltInstrumentAction : public PluginParseTreeAction {
 
         auto &getInstrumentationPoints() {
             return instrumentationPoints_;
+        }
+
+        Fortran::parser::SourcePosition locationFromSource(const Fortran::parser::CharBlock &charBlock) const {
+            return parsing->allCooked().GetSourcePositionRange(charBlock)->first;
         }
 
         // Default empty visit functions for otherwise unhandled types.
@@ -136,14 +144,72 @@ class SaltInstrumentAction : public PluginParseTreeAction {
             subprogramName_.clear();
         }
 
-        bool Pre(const Fortran::parser::ExecutionPart & executionPart) {
-            (void)executionPart; // TODO handle execution part
-            // Need to get the FIRST and the LAST components
-            // Insert timer start before first component
-            // Insert timer end after last component
-            return true;
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct) {
+            return std::visit(
+                Fortran::common::visitors{
+                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                        return locationFromSource(c.source);
+                    }
+                }, construct.u);
+
+            /*
+            std::variant<Statement<ActionStmt>, common::Indirection<AssociateConstruct>,
+      common::Indirection<BlockConstruct>, common::Indirection<CaseConstruct>,
+      common::Indirection<ChangeTeamConstruct>,
+      common::Indirection<CriticalConstruct>,
+      Statement<common::Indirection<LabelDoStmt>>,
+      Statement<common::Indirection<EndDoStmt>>,
+      common::Indirection<DoConstruct>, common::Indirection<IfConstruct>,
+      common::Indirection<SelectRankConstruct>,
+      common::Indirection<SelectTypeConstruct>,
+      common::Indirection<WhereConstruct>, common::Indirection<ForallConstruct>,
+      common::Indirection<CompilerDirective>,
+      common::Indirection<OpenACCConstruct>,
+      common::Indirection<AccEndCombinedDirective>,
+      common::Indirection<OpenMPConstruct>,
+      common::Indirection<OmpEndLoopDirective>,
+      common::Indirection<CUFKernelDoConstruct>>
+      u;
+            */
         }
 
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutionPartConstruct &construct) {
+            // Possibilities for ExecutionPartConstruct:
+            //   ExecutableConstruct
+            //   Statement<common::Indirection<FormatStmt>>
+            //   Statement<common::Indirection<EntryStmt>>
+            //   Statement<common::Indirection<DataStmt>>
+            //   Statement<common::Indirection<NamelistStmt>>
+            //   ErrorRecovery
+            return std::visit(
+                Fortran::common::visitors{
+                    [&](const Fortran::parser::ExecutableConstruct &c) -> Fortran::parser::SourcePosition {
+                        return getLocation(c);
+                    },
+                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                        return locationFromSource(c.source);
+                    },
+                    [&](const Fortran::parser::ErrorRecovery &c) -> Fortran::parser::SourcePosition {
+                        DIE("Should not encounter ErrorRecovery in parse tree");
+                    }
+                }, construct.u);
+        }
+
+        bool Pre(const Fortran::parser::ExecutionPart &executionPart) {
+            (void) executionPart; // TODO handle execution part
+            // Need to get the FIRST and the LAST components
+            // Insert timer start before first component
+            // Use main program insert if in main program, else subprogram insert
+            // Insert timer end after last component
+
+            const Fortran::parser::Block &block = executionPart.v;
+            if (block.empty()) {
+                llvm::outs() << "WARNING: Execution part empty.\n";
+                return true;
+            }
+
+            return true;
+        }
 
     private:
         // Keeps track of current state of traversal
