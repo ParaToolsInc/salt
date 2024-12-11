@@ -354,6 +354,11 @@ class SaltInstrumentAction : public PluginParseTreeAction {
                 return true;
             }
 
+            for (const Fortran::parser::ExecutionPartConstruct & construct : block) {
+                Fortran::parser::SourcePosition loc{getLocation(construct)};
+                llvm::outs() << loc.line << "\n";
+            }
+
             return true;
         }
 
