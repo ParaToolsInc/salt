@@ -144,43 +144,142 @@ class SaltInstrumentAction : public PluginParseTreeAction {
             subprogramName_.clear();
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct) {
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPDeclarativeConstruct &construct) {
+            // This function is based on the equivalent function in
+            // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
+            return std::visit(
+                [&](const auto &o) -> Fortran::parser::SourcePosition {
+                    return locationFromSource(o.source);
+                },
+                construct.u);
+        }
+
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPConstruct &construct) {
+            // This function is based on the equivalent function in
+            // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
+            return std::visit(
+                Fortran::common::visitors{
+                    [&](const Fortran::parser::OpenMPStandaloneConstruct &c) -> Fortran::parser::SourcePosition {
+                        return locationFromSource(c.source);
+                    },
+                    // OpenMPSectionsConstruct, OpenMPLoopConstruct,
+                    // OpenMPBlockConstruct, OpenMPCriticalConstruct Get the source from
+                    // the directive field.
+                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                        const Fortran::parser::CharBlock &source{std::get<0>(c.t).source};
+                        return locationFromSource(source);
+                    },
+                    [&](const Fortran::parser::OpenMPAtomicConstruct &c) -> Fortran::parser::SourcePosition {
+                        return std::visit(
+                            [&](const auto &o) -> Fortran::parser::SourcePosition {
+                                const Fortran::parser::CharBlock &source{
+                                    std::get<Fortran::parser::Verbatim>(o.t).source
+                                };
+                                return locationFromSource(source);
+                            },
+                            c.u);
+                    },
+                    [&](const Fortran::parser::OpenMPSectionConstruct &c) -> Fortran::parser::SourcePosition {
+                        const Fortran::parser::CharBlock &source{c.source};
+                        return locationFromSource(source);
+                    },
+                },
+                construct.u);
+        }
+
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenACCConstruct &construct) {
+            // This function is based on the equivalent function in
+            // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
                 Fortran::common::visitors{
                     [&](const auto &c) -> Fortran::parser::SourcePosition {
                         return locationFromSource(c.source);
+                    },
+                    [&](const Fortran::parser::OpenACCBlockConstruct &c) -> Fortran::parser::SourcePosition {
+                        return locationFromSource(std::get<Fortran::parser::AccBeginBlockDirective>(c.t).source);
+                    },
+                    [&](const Fortran::parser::OpenACCLoopConstruct &c) -> Fortran::parser::SourcePosition {
+                        return locationFromSource(std::get<Fortran::parser::AccBeginLoopDirective>(c.t).source);
+                    },
+                }, construct.u);
+        }
+
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct) {
+            /* Possibilities for ExecutableConstruct:
+                 Statement<ActionStmt>
+                 common::Indirection<AssociateConstruct>
+                 common::Indirection<BlockConstruct>
+                 common::Indirection<CaseConstruct>,
+                 common::Indirection<ChangeTeamConstruct>
+                 common::Indirection<CriticalConstruct>
+                 Statement<common::Indirection<LabelDoStmt>>
+                 Statement<common::Indirection<EndDoStmt>>
+                 common::Indirection<DoConstruct
+                 common::Indirection<IfConstruct>,
+                 common::Indirection<SelectRankConstruct>,
+                 common::Indirection<SelectTypeConstruct>,
+                 common::Indirection<WhereConstruct>
+                 common::Indirection<ForallConstruct>,
+                 common::Indirection<CompilerDirective>,
+                 common::Indirection<OpenACCConstruct>,
+                 common::Indirection<AccEndCombinedDirective>,
+                 common::Indirection<OpenMPConstruct>,
+                 common::Indirection<OmpEndLoopDirective>,
+                 common::Indirection<CUFKernelDoConstruct>
+            */
+            return std::visit(
+                Fortran::common::visitors{
+                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                        return locationFromSource(c.source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::CUFKernelDoConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(std::get<0>(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::OmpEndLoopDirective> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(c.value().source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::OpenMPConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return getLocation(c.value());
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::AccEndCombinedDirective> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(c.value().source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::OpenACCConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return getLocation(c.value());
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::CompilerDirective> & c)->
+                    Fortran::parser::SourcePosition {
+                        return locationFromSource(c.value().source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::ForallConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::ForallConstructStmt> >(c.value().t).
+                            source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::WhereConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::WhereConstructStmt> >(c.value().t).
+                            source);
                     }
                 }, construct.u);
-
-            /*
-            std::variant<Statement<ActionStmt>, common::Indirection<AssociateConstruct>,
-      common::Indirection<BlockConstruct>, common::Indirection<CaseConstruct>,
-      common::Indirection<ChangeTeamConstruct>,
-      common::Indirection<CriticalConstruct>,
-      Statement<common::Indirection<LabelDoStmt>>,
-      Statement<common::Indirection<EndDoStmt>>,
-      common::Indirection<DoConstruct>, common::Indirection<IfConstruct>,
-      common::Indirection<SelectRankConstruct>,
-      common::Indirection<SelectTypeConstruct>,
-      common::Indirection<WhereConstruct>, common::Indirection<ForallConstruct>,
-      common::Indirection<CompilerDirective>,
-      common::Indirection<OpenACCConstruct>,
-      common::Indirection<AccEndCombinedDirective>,
-      common::Indirection<OpenMPConstruct>,
-      common::Indirection<OmpEndLoopDirective>,
-      common::Indirection<CUFKernelDoConstruct>>
-      u;
-            */
         }
 
         Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutionPartConstruct &construct) {
-            // Possibilities for ExecutionPartConstruct:
-            //   ExecutableConstruct
-            //   Statement<common::Indirection<FormatStmt>>
-            //   Statement<common::Indirection<EntryStmt>>
-            //   Statement<common::Indirection<DataStmt>>
-            //   Statement<common::Indirection<NamelistStmt>>
-            //   ErrorRecovery
+            /* Possibilities for ExecutionPartConstruct:
+             *   ExecutableConstruct
+             *   Statement<common::Indirection<FormatStmt>>
+             *   Statement<common::Indirection<EntryStmt>>
+             *   Statement<common::Indirection<DataStmt>>
+             *   Statement<common::Indirection<NamelistStmt>>
+             *   ErrorRecovery
+             */
             return std::visit(
                 Fortran::common::visitors{
                     [&](const Fortran::parser::ExecutableConstruct &c) -> Fortran::parser::SourcePosition {
