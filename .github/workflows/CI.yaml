@@ -20,8 +20,12 @@ jobs:
           else
             ls -la /usr/local/bin/flang
           fi
+          export TAU_MAKEFILE=/usr/local/x86_64/lib/Makefile.tau-clang-pthread
           tau_f90.sh -show
           tau_f90.sh --version
+          tau_cxx.sh -show
+          tau_cxx.sh --version
+          unset TAU_MAKEFILE
       - name: Print working directory
         run: |
             echo "Working directory: $(pwd)"
