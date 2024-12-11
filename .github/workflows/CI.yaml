@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
-      - name: patch TAU & link flang
+      - name: patch TAU & link flang # This can be deleted once the salt-dev image is updated
         run: |
           sed -i 's/#FLANG_NO_MX_OPTS#//' /usr/local/x86_64/lib/Makefile.tau-clang-pthread || echo "sed command returned non-zero status"
           FLANG_NEW="$(which flang-new)"
