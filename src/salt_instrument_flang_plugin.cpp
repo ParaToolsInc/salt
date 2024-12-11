@@ -19,6 +19,13 @@ limitations under the License.
 // See https://flang.llvm.org/docs/FlangDriver.html#frontend-driver-plugins
 // for documentation of the Flang frontend plugin interface
 
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <variant>
+#include <optional>
+#include <tuple>
+
 #include <clang/Basic/SourceLocation.h>
 
 #include "flang/Frontend/FrontendActions.h"
@@ -30,15 +37,17 @@ limitations under the License.
 
 using namespace Fortran::frontend;
 
+// TODO Split declarations into a separate header file.
+
 /**
  * The main action of the Salt instrumentor.
  * Visits each node in the parse tree.
  */
 class SaltInstrumentAction : public PluginParseTreeAction {
     enum class SaltInstrumentationPointType {
-        PROGRAM_BEGIN,
-        PROCEDURE_BEGIN,
-        PROCEDURE_END
+        PROGRAM_BEGIN,    // Declare profiler, initialize TAU, set node, start timer
+        PROCEDURE_BEGIN,  // Declare profiler, start timer
+        PROCEDURE_END     // Stop timer
     };
 
     struct SaltInstrumentationPoint {
@@ -74,12 +83,23 @@ class SaltInstrumentAction : public PluginParseTreeAction {
                 instrumentation_point_type, start_line, timer_name);
         }
 
-        auto &getInstrumentationPoints() {
+        const auto & getInstrumentationPoints() const {
             return instrumentationPoints_;
         }
 
-        Fortran::parser::SourcePosition locationFromSource(const Fortran::parser::CharBlock &charBlock) const {
-            return parsing->allCooked().GetSourcePositionRange(charBlock)->first;
+        /**
+         * From a CharBlock object (generally held in the `source` field of a parse tree node,
+         * get the source position (file, line, column).
+         * If `end` is set, returns the ending position of the block.
+         * If `end` is not set (and by default), returns the starting position of the block.
+         */
+        [[nodiscard]] Fortran::parser::SourcePosition locationFromSource(
+            const Fortran::parser::CharBlock &charBlock, const bool end = false) const {
+            const auto & sourceRange{parsing->allCooked().GetSourcePositionRange(charBlock)};
+            if (end) {
+                return sourceRange->second;
+            }
+            return sourceRange->first;
         }
 
         // Default empty visit functions for otherwise unhandled types.
@@ -88,6 +108,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
 
         template<typename A>
         static void Post(const A &) {
+            // this space intentionally left blank
         }
 
         // Override all types that we want to visit.
@@ -143,6 +164,8 @@ class SaltInstrumentAction : public PluginParseTreeAction {
             llvm::outs() << "Exit Function: " << subprogramName_ << "\n";
             subprogramName_.clear();
         }
+
+        // TODO split location-getting routines into a separate file
 
         Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPDeclarativeConstruct &construct) {
             // This function is based on the equivalent function in
@@ -234,7 +257,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CUFKernelDoConstruct> &c) ->
                 Fortran::parser::SourcePosition {
-                        return locationFromSource(std::get<0>(c.value().t).source);
+                        return locationFromSource(std::get<Fortran::parser::CUFKernelDoConstruct::Directive>(c.value().t).source);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OmpEndLoopDirective> &c) ->
                 Fortran::parser::SourcePosition {
@@ -342,8 +365,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         }
 
         bool Pre(const Fortran::parser::ExecutionPart &executionPart) {
-            (void) executionPart; // TODO handle execution part
-            // Need to get the FIRST and the LAST components
+            // TODO Need to get the FIRST and the LAST components
             // Insert timer start before first component
             // Use main program insert if in main program, else subprogram insert
             // Insert timer end after last component
@@ -351,12 +373,20 @@ class SaltInstrumentAction : public PluginParseTreeAction {
             const Fortran::parser::Block &block = executionPart.v;
             if (block.empty()) {
                 llvm::outs() << "WARNING: Execution part empty.\n";
-                return true;
-            }
-
-            for (const Fortran::parser::ExecutionPartConstruct & construct : block) {
-                Fortran::parser::SourcePosition loc{getLocation(construct)};
-                llvm::outs() << loc.line << "\n";
+            } else {
+                const Fortran::parser::SourcePosition startLoc{getLocation(block.front())};
+                const Fortran::parser::SourcePosition endLoc{getLocation(block.back())};
+                if (isInMainProgram_) {
+                    llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << "\n";
+                    addInstrumentationPoint(SaltInstrumentationPointType::PROGRAM_BEGIN, startLoc.line,
+                                            mainProgramName_);
+                } else{
+                    llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << "\n";
+                    addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_BEGIN, startLoc.line,
+                                            subprogramName_);
+                }
+                llvm::outs() << "End at " << endLoc.line << "\n";
+                addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_END, endLoc.line);
             }
 
             return true;
@@ -373,7 +403,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         // Pass in the parser object from the Action to the Visitor
         // so that we can use it while processing parse tree nodes.
         [[maybe_unused]] Fortran::parser::Parsing *parsing{nullptr};
-    };
+    }; // SaltInstrumentParseTreeVisitor
 
     /**
      * Get the source file represented by a given parse tree
@@ -384,7 +414,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
      */
     static std::optional<std::string> getInputFilePath(Fortran::parser::Parsing &parsing) {
         const auto &allSources{parsing.allCooked().allSources()};
-        if (auto firstProv{allSources.GetFirstFileProvenance()}) {
+        if (const auto firstProv{allSources.GetFirstFileProvenance()}) {
             if (const auto *srcFile{allSources.GetSourceFile(firstProv->start())}) {
                 return srcFile->path();
             }
@@ -392,6 +422,21 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         return std::nullopt;
     }
 
+    static void instrumentFile(const std::string &inputFilePath, llvm::raw_pwrite_stream &outputStream,
+                               const SaltInstrumentParseTreeVisitor &visitor) {
+        std::ifstream inputStream{inputFilePath};
+        if (!inputStream) {
+            llvm::errs() << "ERROR: Could not open input file" << inputFilePath << "\n";
+            std::exit(-2);
+        }
+        std::string line;
+        int lineNum{0};
+        while (std::getline(inputStream, line)) {
+            ++lineNum;
+            outputStream << line << "\n";
+        }
+        (void)lineNum;
+    }
 
     /**
      * This is the entry point for the plugin.
@@ -406,7 +451,7 @@ class SaltInstrumentAction : public PluginParseTreeAction {
         // Get the path to the input file
         const auto inputFilePath = getInputFilePath(parsing);
         if (!inputFilePath) {
-            llvm::outs() << "ERROR: Unable to find input file name!\n";
+            llvm::errs() << "ERROR: Unable to find input file name!\n";
             std::exit(-1);
         }
         llvm::outs() << "Have input file: " << *inputFilePath << "\n";
@@ -422,17 +467,20 @@ class SaltInstrumentAction : public PluginParseTreeAction {
 
         // Open an output file for writing the instrumented code
         const std::string outputFileExtension = "inst."s + inputFileExtension;
-        auto outputFile = createOutputFile(outputFileExtension);
+        const auto outputFileStream = createOutputFile(outputFileExtension);
 
         // Walk the parse tree
         SaltInstrumentParseTreeVisitor visitor{&parsing};
         Walk(parsing.parseTree(), visitor);
 
         // TODO write the instrumented code
+        instrumentFile(*inputFilePath, *outputFileStream, visitor);
+
+        outputFileStream->flush();
 
         llvm::outs() << "==== SALT Instrumentor Plugin finished ====\n";
     }
 };
 
-static FrontendPluginRegistry::Add<SaltInstrumentAction> X(
+[[maybe_unused]] static FrontendPluginRegistry::Add<SaltInstrumentAction> X(
     "salt-instrument", "Apply SALT Instrumentation");
