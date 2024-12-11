@@ -14,9 +14,11 @@ jobs:
       - name: patch TAU & link flang
         run: |
           sed -i 's/#FLANG_NO_MX_OPTS#//' /usr/local/x86_64/lib/Makefile.tau-clang-pthread || echo "sed command returned non-zero status"
+          FLANG_NEW="$(which flang-new)"
           if ! [ -e /usr/local/bin/flang ]; then
             echo "Linking flang-new as flang"
-            ln -s /usr/local/bin/flang-new /usr/local/bin/flang
+            ln -s "$FLANG_NEW" /usr/local/bin/flang
+            ls -la /usr/local/bin/flang
           else
             ls -la /usr/local/bin/flang
           fi
