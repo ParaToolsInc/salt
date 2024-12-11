@@ -267,6 +267,53 @@ class SaltInstrumentAction : public PluginParseTreeAction {
                         return locationFromSource(
                             std::get<Fortran::parser::Statement<Fortran::parser::WhereConstructStmt> >(c.value().t).
                             source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::SelectTypeConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::SelectTypeStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::SelectRankConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::SelectRankStmt> >(c.value().t).
+                            source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::IfConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::IfThenStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::DoConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::NonLabelDoStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::CriticalConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::CriticalStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::ChangeTeamConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                       return locationFromSource(
+                           std::get<Fortran::parser::Statement<Fortran::parser::ChangeTeamStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::CaseConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::SelectCaseStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::BlockConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                        return locationFromSource(
+                            std::get<Fortran::parser::Statement<Fortran::parser::BlockStmt> >(c.value().t).source);
+                    },
+                    [&](const Fortran::common::Indirection<Fortran::parser::AssociateConstruct> &c) ->
+                Fortran::parser::SourcePosition {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::AssociateStmt> >(c.value().t).
+                                source);
                     }
                 }, construct.u);
         }
