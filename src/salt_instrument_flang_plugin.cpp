@@ -21,10 +21,17 @@ limitations under the License.
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <variant>
 #include <optional>
 #include <tuple>
+
+
+#define RYML_SINGLE_HDR_DEFINE_NOW
+#define RYML_SHARED
+
+#include <ryml_all.hpp>
 
 #include <clang/Basic/SourceLocation.h>
 
@@ -35,9 +42,13 @@ limitations under the License.
 #include "flang/Parser/source.h"
 #include "flang/Common/indirection.h"
 
+// TODO Split declarations into a separate header file.
+
+#define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
+#define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/fortran_config.yaml"
+
 using namespace Fortran::frontend;
 
-// TODO Split declarations into a separate header file.
 
 /**
  * The main action of the Salt instrumentor.
@@ -173,8 +184,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         // TODO split location-getting routines into a separate file
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPDeclarativeConstruct &construct,
-                                                    const bool end) {
+        [[nodiscard]] Fortran::parser::SourcePosition getLocation(
+            const Fortran::parser::OpenMPDeclarativeConstruct &construct,
+            const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
@@ -184,7 +196,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPConstruct &construct, const bool end) {
+        [[nodiscard]] Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPConstruct &construct,
+                                                                  const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
@@ -217,7 +230,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 construct.u);
         }
 
-        Fortran::parser::SourcePosition
+        [[nodiscard]] Fortran::parser::SourcePosition
         getLocation(const Fortran::parser::OpenACCConstruct &construct, const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
@@ -240,8 +253,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 }, construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct,
-                                                    const bool end) {
+        [[nodiscard]] Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct,
+                                                                  const bool end) {
             /* Possibilities for ExecutableConstruct:
                  Statement<ActionStmt>
                  common::Indirection<AssociateConstruct>
@@ -429,8 +442,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 }, construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutionPartConstruct &construct,
-                                                    const bool end) {
+        [[nodiscard]] Fortran::parser::SourcePosition getLocation(
+            const Fortran::parser::ExecutionPartConstruct &construct,
+            const bool end) {
             /* Possibilities for ExecutionPartConstruct:
              *   ExecutableConstruct
              *   Statement<common::Indirection<FormatStmt>>
@@ -488,7 +502,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         // Pass in the parser object from the Action to the Visitor
         // so that we can use it while processing parse tree nodes.
-        [[maybe_unused]] Fortran::parser::Parsing *parsing{nullptr};
+        Fortran::parser::Parsing *parsing{nullptr};
     }; // SaltInstrumentParseTreeVisitor
 
     /**
@@ -498,7 +512,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
      * flang/lib/Semantics/runtime-type-info.cpp for example
      * of getting the source file name.
      */
-    static std::optional<std::string> getInputFilePath(Fortran::parser::Parsing &parsing) {
+    [[nodiscard]] static std::optional<std::string> getInputFilePath(Fortran::parser::Parsing &parsing) {
         const auto &allSources{parsing.allCooked().allSources()};
         if (const auto firstProv{allSources.GetFirstFileProvenance()}) {
             if (const auto *srcFile{allSources.GetSourceFile(firstProv->start())}) {
@@ -507,6 +521,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
         return std::nullopt;
     }
+
+
 
     [[nodiscard]] static std::string getInstrumentationPointString(const SaltInstrumentationPointType type) {
         switch (type) {
@@ -546,6 +562,26 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
     }
 
+    [[nodiscard]] static std::string getConfigPath() {
+        if (const char *val = getenv(SALT_FORTRAN_CONFIG_FILE_VAR)) {
+            return std::string{val};
+        }
+        return SALT_FORTRAN_CONFIG_DEFAULT_PATH;
+    }
+
+    [[nodiscard]] static ryml::Tree getConfigYamlTree(const std::string &configPath) {
+        std::ifstream inputStream{configPath};
+        if (!inputStream) {
+            llvm::errs() << "ERROR: Could not open configuration file " << configPath << "\n"
+                    << "Set " SALT_FORTRAN_CONFIG_FILE_VAR " to path to desired configuration file.\n";
+            std::exit(-3);
+        }
+        std::stringstream configStream;
+        configStream << inputStream.rdbuf();
+        // TODO handle errors if config yaml doesn't parse
+        return ryml::parse_in_arena(ryml::to_csubstr(configStream.str()));
+    }
+
     /**
      * This is the entry point for the plugin.
      */
@@ -563,6 +599,11 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             std::exit(-1);
         }
         llvm::outs() << "Have input file: " << *inputFilePath << "\n";
+
+        const std::string configPath{getConfigPath()};
+        ryml::Tree yamlTree = getConfigYamlTree(configPath);
+        //TODO call read yaml func
+
 
         // Get the extension of the input file
         // For input file 'filename.ext' we will output to 'filename.inst.ext'
