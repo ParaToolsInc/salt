@@ -188,7 +188,7 @@ add_library(SALT_LLVM_TOOLING INTERFACE)
 target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_17)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
-target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
+target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Wpedantic $<$<CONFIG:Debug>:-Wno-gnu-zero-variadic-macro-arguments>)
 target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS})
 
 #---------------------------------
@@ -234,7 +234,8 @@ target_compile_features(cparse-llvm PUBLIC cxx_std_17)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
 # You can try adding -static
 target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
-
+# Turn on debug output if a debug build is being built
+target_compile_definitions(cparse-llvm PUBLIC $<$<CONFIG:Debug>:DEBUG_NO_WAY>)
 # Install the target
 install(TARGETS cparse-llvm DESTINATION bin)
 
@@ -545,13 +546,23 @@ function(compile_instrumented test_src)
     # Fixture to cleanup old profile directories
     add_test(NAME rm_old_${lower_comp}_${TEST_NAME}_profiles
       COMMAND
-      ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.${lower_comp}.d
+      ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.d
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(rm_old_${lower_comp}_${TEST_NAME}_profiles
       PROPERTIES
       FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
       DEPENDS setup_${comp}_dir
+    )
+    add_test(NAME mkdir_${TEST_BASE_NAME}.${lower_comp}.d
+      COMMAND
+      ${CMAKE_COMMAND} -E make_directory ${TEST_BASE_NAME}.d
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+    )
+    set_tests_properties(mkdir_${TEST_BASE_NAME}.${lower_comp}.d
+      PROPERTIES
+      FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
+      DEPENDS rm_old_${lower_comp}_${TEST_NAME}_profiles
     )
     # Profile w/ TAU and Verify profiles are created
     add_test(NAME run_${lower_comp}_${TEST_NAME}
@@ -561,13 +572,13 @@ function(compile_instrumented test_src)
     )
     set_tests_properties(run_${lower_comp}_${TEST_NAME}
       PROPERTIES
-      ENVIRONMENT "TAU_MAKEFILE=${TAU_${comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.${lower_comp}.d"
+      ENVIRONMENT "TAU_MAKEFILE=${TAU_${comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
       DEPENDS compile_${lower_comp}_${TEST_NAME}
       FIXTURES_REQUIRED clean_${lower_comp}_${TEST_NAME}_profiles
       FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
     )
     add_test(NAME check_${lower_comp}_${TEST_NAME}_profile
-      COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.${lower_comp}.d/profile.0.0.0
+      COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
     )
     set_tests_properties(check_${lower_comp}_${TEST_NAME}_profile
