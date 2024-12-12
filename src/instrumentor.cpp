@@ -85,7 +85,7 @@ void dump_inst_loc(inst_loc *loc)
     DPRINT("\tCol:                    %d\n", loc->col);
     DPRINT("\tKind:                 %s\n", loc_typ_strs[loc->kind]);
     DPRINT("\tRet type:         %s\n", loc->return_type);
-    DPRINT("\tName:                 %s\n", loc->func_name);
+    DPRINT("\tName:                 \"%s\"\n", loc->func_name);
     DPRINT("\tTimer:                    %s\n", loc->full_timer_name);
     DPRINT("\tHas args:         %s\n", loc->has_args ? "Yes" : "No");
     DPRINT("\tIs ret ptr:     %s\n", loc->is_return_ptr ? "Yes" : "No");
@@ -143,10 +143,11 @@ std::string ReplacePhrase(std::string str, std::string phrase, std::string to_re
 
 void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree)
 {
-
+    /* dump the location */
+    /* dump_inst_loc(loc); */
     if (!loc->skip)
     {
-        if (strcmp(loc->func_name, "main") == 0 && loc->has_args)
+        if (strcmp(loc->func_name, "main") == 0 )
         {
             // Insert on main function
             for (ryml::NodeRef const& child : yaml_tree["main_insert"].children()) 
@@ -155,6 +156,11 @@ void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree
                 ss << child.val();
                 std::string updated_str;
                 updated_str  = ReplacePhrase(ss.str(), "${full_timer_name}", loc->full_timer_name);
+                /* handle the case where main does NOT have arguments */
+                if (!loc->has_args)
+                {
+                    updated_str = ReplacePhrase(updated_str, "    TAU_INIT(&argc, &argv);", "/* TAU_INIT() skipped, no arguments */");
+                }
                 code += updated_str + "\n";
             }
         }
