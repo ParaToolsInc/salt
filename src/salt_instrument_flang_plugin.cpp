@@ -26,6 +26,7 @@ limitations under the License.
 #include <variant>
 #include <optional>
 #include <tuple>
+#include <regex>
 
 
 #define RYML_SINGLE_HDR_DEFINE_NOW
@@ -47,6 +48,12 @@ limitations under the License.
 #define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
 #define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/fortran_config.yaml"
 
+#define SALT_FORTRAN_PROGRAM_BEGIN_KEY "program_insert"
+#define SALT_FORTRAN_PROCEDURE_BEGIN_KEY "procedure_begin_insert"
+#define SALT_FORTRAN_PROCEDURE_END_KEY "procedure_end_insert"
+
+#define SALT_FORTRAN_TIMER_NAME_TEMPLATE R"(\$\{full_timer_name\})"
+
 using namespace Fortran::frontend;
 
 
@@ -60,6 +67,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         PROCEDURE_BEGIN, // Declare profiler, start timer
         PROCEDURE_END // Stop timer
     };
+
+    typedef std::map<SaltInstrumentationPointType, const std::string> InstrumentationMap;
 
     struct SaltInstrumentationPoint {
         SaltInstrumentationPoint(const SaltInstrumentationPointType instrumentation_point_type,
@@ -523,22 +532,19 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
     }
 
 
-
-    [[nodiscard]] static std::string getInstrumentationPointString(const SaltInstrumentationPointType type) {
-        switch (type) {
-            case SaltInstrumentationPointType::PROCEDURE_BEGIN:
-                return "! PROCEDURE BEGIN";
-            case SaltInstrumentationPointType::PROGRAM_BEGIN:
-                return "! PROGRAM BEGIN";
-            case SaltInstrumentationPointType::PROCEDURE_END:
-                return "! PROCEDURE END";
-            default:
-                CRASH_NO_CASE;
+    [[nodiscard]] static std::string getInstrumentationPointString(const SaltInstrumentationPoint & instPt,
+                                                                   const InstrumentationMap &instMap) {
+        std::string instTemplate = instMap.at(instPt.instrumentationPointType);
+        if (instPt.timerName.has_value()) {
+            instTemplate = std::regex_replace(instTemplate, std::regex(SALT_FORTRAN_TIMER_NAME_TEMPLATE),
+                                              instPt.timerName.value());
         }
+        return instTemplate;
     }
 
     static void instrumentFile(const std::string &inputFilePath, llvm::raw_pwrite_stream &outputStream,
-                               const SaltInstrumentParseTreeVisitor &visitor) {
+                               const SaltInstrumentParseTreeVisitor &visitor,
+                               const InstrumentationMap & instMap) {
         std::ifstream inputStream{inputFilePath};
         if (!inputStream) {
             llvm::errs() << "ERROR: Could not open input file" << inputFilePath << "\n";
@@ -551,12 +557,12 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         while (std::getline(inputStream, line)) {
             ++lineNum;
             if (instIter != instPts.cend() && instIter->startLine == lineNum && instIter->instrumentBefore()) {
-                outputStream << getInstrumentationPointString(instIter->instrumentationPointType) << "\n";
+                outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
                 ++instIter;
             }
             outputStream << line << "\n";
             if (instIter != instPts.cend() && instIter->startLine == lineNum && !instIter->instrumentBefore()) {
-                outputStream << getInstrumentationPointString(instIter->instrumentationPointType) << "\n";
+                outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
                 ++instIter;
             }
         }
@@ -582,6 +588,27 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         return ryml::parse_in_arena(ryml::to_csubstr(configStream.str()));
     }
 
+    [[nodiscard]] static InstrumentationMap getInstrumentationMap(const ryml::Tree &tree) {
+        InstrumentationMap map;
+        std::stringstream ss;
+        // TODO validate yaml, print error if field missing
+        for (const ryml::NodeRef child: tree[SALT_FORTRAN_PROGRAM_BEGIN_KEY].children()) {
+            ss << child.val() << "\n";
+        }
+        map.emplace(SaltInstrumentationPointType::PROGRAM_BEGIN, ss.str());
+        ss.str(""s);
+        for (const ryml::NodeRef child: tree[SALT_FORTRAN_PROCEDURE_BEGIN_KEY].children()) {
+            ss << child.val() << "\n";
+        }
+        map.emplace(SaltInstrumentationPointType::PROCEDURE_BEGIN, ss.str());
+        ss.str(""s);
+        for (const ryml::NodeRef child: tree[SALT_FORTRAN_PROCEDURE_END_KEY].children()) {
+            ss << child.val() << "\n";
+        }
+        map.emplace(SaltInstrumentationPointType::PROCEDURE_END, ss.str());
+        return map;
+    }
+
     /**
      * This is the entry point for the plugin.
      */
@@ -601,9 +628,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         llvm::outs() << "Have input file: " << *inputFilePath << "\n";
 
         const std::string configPath{getConfigPath()};
-        ryml::Tree yamlTree = getConfigYamlTree(configPath);
-        //TODO call read yaml func
-
+        const ryml::Tree yamlTree = getConfigYamlTree(configPath);
+        const InstrumentationMap instMap = getInstrumentationMap(yamlTree);
 
         // Get the extension of the input file
         // For input file 'filename.ext' we will output to 'filename.inst.ext'
@@ -623,7 +649,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         Walk(parsing.parseTree(), visitor);
 
         // Use the instrumentation points stored in the Visitor to write the instrumented file.
-        instrumentFile(*inputFilePath, *outputFileStream, visitor);
+        instrumentFile(*inputFilePath, *outputFileStream, visitor, instMap);
 
         outputFileStream->flush();
 
