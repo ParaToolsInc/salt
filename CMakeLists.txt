@@ -463,7 +463,7 @@ function(add_instrumentor_test test_src)
   set_tests_properties(${TEST_NAME}_exists
     PROPERTIES
     DEPENDS ${TEST_NAME}
-    PASS_REGULAR_EXPRESSION "TAU_"
+    PASS_REGULAR_EXPRESSION "TAU_PROFILE_SET_NODE"
   )
 endfunction()
 
@@ -583,7 +583,7 @@ function(compile_instrumented test_src)
     )
     set_tests_properties(check_${lower_comp}_${TEST_NAME}_profile
       PROPERTIES
-      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_USER"
+      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
       FAIL_REGULAR_EXPRESSION "addr=\<0x"
       DEPENDS run_${lower_comp}_${TEST_NAME}
     )
