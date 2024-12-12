@@ -100,7 +100,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
          * If `end` is not set (and by default), returns the starting position of the block.
          */
         [[nodiscard]] Fortran::parser::SourcePosition locationFromSource(
-            const Fortran::parser::CharBlock &charBlock, const bool end = false) const {
+            const Fortran::parser::CharBlock &charBlock, const bool end) const {
             const auto &sourceRange{parsing->allCooked().GetSourcePositionRange(charBlock)};
             if (end) {
                 return sourceRange->second;
@@ -173,30 +173,31 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         // TODO split location-getting routines into a separate file
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPDeclarativeConstruct &construct) {
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPDeclarativeConstruct &construct,
+                                                    const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
                 [&](const auto &o) -> Fortran::parser::SourcePosition {
-                    return locationFromSource(o.source);
+                    return locationFromSource(o.source, end);
                 },
                 construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPConstruct &construct) {
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPConstruct &construct, const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
                 Fortran::common::visitors{
                     [&](const Fortran::parser::OpenMPStandaloneConstruct &c) -> Fortran::parser::SourcePosition {
-                        return locationFromSource(c.source);
+                        return locationFromSource(c.source, end);
                     },
                     // OpenMPSectionsConstruct, OpenMPLoopConstruct,
                     // OpenMPBlockConstruct, OpenMPCriticalConstruct Get the source from
                     // the directive field.
                     [&](const auto &c) -> Fortran::parser::SourcePosition {
                         const Fortran::parser::CharBlock &source{std::get<0>(c.t).source};
-                        return locationFromSource(source);
+                        return locationFromSource(source, end);
                     },
                     [&](const Fortran::parser::OpenMPAtomicConstruct &c) -> Fortran::parser::SourcePosition {
                         return std::visit(
@@ -204,151 +205,232 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                                 const Fortran::parser::CharBlock &source{
                                     std::get<Fortran::parser::Verbatim>(o.t).source
                                 };
-                                return locationFromSource(source);
+                                return locationFromSource(source, end);
                             },
                             c.u);
                     },
                     [&](const Fortran::parser::OpenMPSectionConstruct &c) -> Fortran::parser::SourcePosition {
                         const Fortran::parser::CharBlock &source{c.source};
-                        return locationFromSource(source);
+                        return locationFromSource(source, end);
                     },
                 },
                 construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenACCConstruct &construct) {
+        Fortran::parser::SourcePosition
+        getLocation(const Fortran::parser::OpenACCConstruct &construct, const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
                 Fortran::common::visitors{
                     [&](const auto &c) -> Fortran::parser::SourcePosition {
-                        return locationFromSource(c.source);
+                        return locationFromSource(c.source, end);
                     },
                     [&](const Fortran::parser::OpenACCBlockConstruct &c) -> Fortran::parser::SourcePosition {
-                        return locationFromSource(std::get<Fortran::parser::AccBeginBlockDirective>(c.t).source);
+                        if (end) {
+                            return locationFromSource(std::get<Fortran::parser::AccEndBlockDirective>(c.t).source,
+                                                      end);
+                        }
+                        return locationFromSource(std::get<Fortran::parser::AccBeginBlockDirective>(c.t).source, end);
                     },
                     [&](const Fortran::parser::OpenACCLoopConstruct &c) -> Fortran::parser::SourcePosition {
-                        return locationFromSource(std::get<Fortran::parser::AccBeginLoopDirective>(c.t).source);
+                        // TODO handle end case (complicated because end statement and do construct are optional)
+                        return locationFromSource(std::get<Fortran::parser::AccBeginLoopDirective>(c.t).source, end);
                     },
                 }, construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct) {
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct,
+                                                    const bool end) {
             /* Possibilities for ExecutableConstruct:
                  Statement<ActionStmt>
                  common::Indirection<AssociateConstruct>
                  common::Indirection<BlockConstruct>
-                 common::Indirection<CaseConstruct>,
+                 common::Indirection<CaseConstruct>
                  common::Indirection<ChangeTeamConstruct>
                  common::Indirection<CriticalConstruct>
                  Statement<common::Indirection<LabelDoStmt>>
                  Statement<common::Indirection<EndDoStmt>>
-                 common::Indirection<DoConstruct
-                 common::Indirection<IfConstruct>,
-                 common::Indirection<SelectRankConstruct>,
-                 common::Indirection<SelectTypeConstruct>,
+                 common::Indirection<DoConstruct>
+                 common::Indirection<IfConstruct>
+                 common::Indirection<SelectRankConstruct>
+                 common::Indirection<SelectTypeConstruct>
                  common::Indirection<WhereConstruct>
-                 common::Indirection<ForallConstruct>,
-                 common::Indirection<CompilerDirective>,
-                 common::Indirection<OpenACCConstruct>,
-                 common::Indirection<AccEndCombinedDirective>,
-                 common::Indirection<OpenMPConstruct>,
-                 common::Indirection<OmpEndLoopDirective>,
+                 common::Indirection<ForallConstruct>
+                 common::Indirection<CompilerDirective>
+                 common::Indirection<OpenACCConstruct>
+                 common::Indirection<AccEndCombinedDirective>
+                 common::Indirection<OpenMPConstruct>
+                 common::Indirection<OmpEndLoopDirective>
                  common::Indirection<CUFKernelDoConstruct>
             */
             return std::visit(
                 Fortran::common::visitors{
                     [&](const auto &c) -> Fortran::parser::SourcePosition {
-                        return locationFromSource(c.source);
+                        return locationFromSource(c.source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CUFKernelDoConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            const auto &optionalConstruct = std::get<std::optional<Fortran::parser::DoConstruct> >(
+                                c.value().t);
+                            if (optionalConstruct.has_value()) {
+                                return locationFromSource(
+                                    std::get<Fortran::parser::Statement<Fortran::parser::EndDoStmt> >(
+                                        optionalConstruct.value().t).source, end);
+                            }
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::CUFKernelDoConstruct::Directive>(c.value().t).source);
+                            std::get<Fortran::parser::CUFKernelDoConstruct::Directive>(c.value().t).source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OmpEndLoopDirective> &c) ->
                 Fortran::parser::SourcePosition {
-                        return locationFromSource(c.value().source);
+                        return locationFromSource(c.value().source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OpenMPConstruct> &c) ->
                 Fortran::parser::SourcePosition {
-                        return getLocation(c.value());
+                        return getLocation(c.value(), end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::AccEndCombinedDirective> &c) ->
                 Fortran::parser::SourcePosition {
-                        return locationFromSource(c.value().source);
+                        return locationFromSource(c.value().source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OpenACCConstruct> &c) ->
                 Fortran::parser::SourcePosition {
-                        return getLocation(c.value());
+                        return getLocation(c.value(), end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CompilerDirective> &c)->
                 Fortran::parser::SourcePosition {
-                        return locationFromSource(c.value().source);
+                        return locationFromSource(c.value().source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::ForallConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndForallStmt> >(c.value().t).
+                                source, end);
+                        }
                         return locationFromSource(
                             std::get<Fortran::parser::Statement<Fortran::parser::ForallConstructStmt> >(c.value().t).
-                            source);
+                            source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::WhereConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndWhereStmt> >(c.value().t).
+                                source, end);
+                        }
                         return locationFromSource(
                             std::get<Fortran::parser::Statement<Fortran::parser::WhereConstructStmt> >(c.value().t).
-                            source);
+                            source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::SelectTypeConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndSelectStmt> >(c.value().t).
+                                source, end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::SelectTypeStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::SelectTypeStmt> >(c.value().t).source,
+                            end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::SelectRankConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndSelectStmt> >(c.value().t).
+                                source, end);
+                        }
                         return locationFromSource(
                             std::get<Fortran::parser::Statement<Fortran::parser::SelectRankStmt> >(c.value().t).
-                            source);
+                            source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::IfConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndIfStmt> >(c.value().t).source,
+                                end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::IfThenStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::IfThenStmt> >(c.value().t).source,
+                            end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::DoConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndDoStmt> >(c.value().t).source,
+                                end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::NonLabelDoStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::NonLabelDoStmt> >(c.value().t).source,
+                            end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CriticalConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndCriticalStmt> >(c.value().t).
+                                source,
+                                end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::CriticalStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::CriticalStmt> >(c.value().t).source,
+                            end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::ChangeTeamConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndChangeTeamStmt> >(c.value().t).
+                                source,
+                                end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::ChangeTeamStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::ChangeTeamStmt> >(c.value().t).source,
+                            end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CaseConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndSelectStmt> >(c.value().t).
+                                source, end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::SelectCaseStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::SelectCaseStmt> >(c.value().t).source,
+                            end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::BlockConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndBlockStmt> >(c.value().t).
+                                source,
+                                end);
+                        }
                         return locationFromSource(
-                            std::get<Fortran::parser::Statement<Fortran::parser::BlockStmt> >(c.value().t).source);
+                            std::get<Fortran::parser::Statement<Fortran::parser::BlockStmt> >(c.value().t).source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::AssociateConstruct> &c) ->
                 Fortran::parser::SourcePosition {
+                        if (end) {
+                            return locationFromSource(
+                                std::get<Fortran::parser::Statement<Fortran::parser::EndAssociateStmt> >(c.value().t).
+                                source, end);
+                        }
                         return locationFromSource(
                             std::get<Fortran::parser::Statement<Fortran::parser::AssociateStmt> >(c.value().t).
-                            source);
+                            source, end);
                     }
                 }, construct.u);
         }
 
-        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutionPartConstruct &construct) {
+        Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutionPartConstruct &construct,
+                                                    const bool end) {
             /* Possibilities for ExecutionPartConstruct:
              *   ExecutableConstruct
              *   Statement<common::Indirection<FormatStmt>>
@@ -360,10 +442,10 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             return std::visit(
                 Fortran::common::visitors{
                     [&](const Fortran::parser::ExecutableConstruct &c) -> Fortran::parser::SourcePosition {
-                        return getLocation(c);
+                        return getLocation(c, end);
                     },
                     [&](const auto &c) -> Fortran::parser::SourcePosition {
-                        return locationFromSource(c.source);
+                        return locationFromSource(c.source, end);
                     },
                     [&](const Fortran::parser::ErrorRecovery &) -> Fortran::parser::SourcePosition {
                         DIE("Should not encounter ErrorRecovery in parse tree");
@@ -375,18 +457,21 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             if (const Fortran::parser::Block &block = executionPart.v; block.empty()) {
                 llvm::outs() << "WARNING: Execution part empty.\n";
             } else {
-                const Fortran::parser::SourcePosition startLoc{getLocation(block.front())};
-                const Fortran::parser::SourcePosition endLoc{getLocation(block.back())};
+                llvm::outs() << "ExecutionPart num blocks: " << block.size() << "\n";
+                const Fortran::parser::SourcePosition startLoc{getLocation(block.front(), false)};
+                const Fortran::parser::SourcePosition endLoc{getLocation(block.back(), true)};
                 if (isInMainProgram_) {
-                    llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << "\n";
+                    llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", " <<
+                            startLoc.column << "\n";
                     addInstrumentationPoint(SaltInstrumentationPointType::PROGRAM_BEGIN, startLoc.line,
                                             mainProgramName_);
                 } else {
-                    llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << "\n";
+                    llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << ", " <<
+                            startLoc.column << "\n";
                     addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_BEGIN, startLoc.line,
                                             subprogramName_);
                 }
-                llvm::outs() << "End at " << endLoc.line << "\n";
+                llvm::outs() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
                 addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_END, endLoc.line);
             }
 
@@ -423,7 +508,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         return std::nullopt;
     }
 
-    [[nodiscard]] static std::string getInstrumentationPointString(SaltInstrumentationPointType type) {
+    [[nodiscard]] static std::string getInstrumentationPointString(const SaltInstrumentationPointType type) {
         switch (type) {
             case SaltInstrumentationPointType::PROCEDURE_BEGIN:
                 return "! PROCEDURE BEGIN";
