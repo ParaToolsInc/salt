@@ -297,6 +297,10 @@ if(MLIR_FOUND AND Flang_FOUND)
 
     install(TARGETS salt-flang-plugin DESTINATION lib)
 
+    configure_file(${CMAKE_SOURCE_DIR}/src/fparse-llvm.in ${CMAKE_BINARY_DIR}/fparse-llvm @ONLY)
+    install(PROGRAMS ${CMAKE_BINARY_DIR}/fparse-llvm
+      TYPE BIN)
+
 else()
     message(STATUS "Flang not found -- skipping Flang frontend plugin")
 endif()
@@ -592,4 +596,27 @@ endfunction()
 
 foreach(test_source IN LISTS TESTS_LIST)
   compile_instrumented(${test_source})
+endforeach()
+
+# Add some Fortran tests for SALT-FM
+set(FORTRAN_TESTS_SOURCES_LIST
+  myhi.f
+  cubes.f
+  emptyprog.f90
+  funcsub.f90
+  hello.f90
+  loop_test.f90
+  trivial.f90
+)
+
+foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
+  add_test(NAME instrument_${test_source}
+    COMMAND ./fparse-llvm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
+    )
+  set_tests_properties(instrument_${test_source}
+    PROPERTIES
+    REQUIRED_FILES "${CMAKE_BINARY_DIR}/fparse-llvm"
+    ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_fortran_config.yaml"
+    PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
+  )
 endforeach()
