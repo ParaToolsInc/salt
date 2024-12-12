@@ -21,5 +21,74 @@ set -o pipefail
 #set -o verbose
 #set -o xtrace
 
+# Loop over the arguments and check for the output file -o flag and it's argument
+# If found, set the output file name to the argument following the -o flag and remove the -o flag and argument from the argument list
+# If not found, set the output file name to the first argument with a .inst extension
+args=()
+expecting_output_file=false
+show=false
+for arg in "$@"; do
+    echo "working on arg: $arg"
+    if $expecting_output_file; then
+        output_file="$arg"
+        expecting_output_file=false
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -o ]]; then
+        shift
+        expecting_output_file=true
+        #echo "args remaining: $*"
+    elif [[ $arg == -o* ]]; then
+        output_file="${arg#-o}"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == *.[Ff]90 || $arg == *.[Ff] || $arg == *.[Ff]03 ]]; then
+        input_file="$arg"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -show ]]; then
+        show=true
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ -n ${arg:-} ]]; then
+        args+=("${arg}")
+        shift || true
+        #echo "args remaining: $*"
+    fi
+done
+
+#echo "args: \"${args[*]}\""
+# print the argument list
+if [[ -z "${input_file:-}" ]]; then
+    input_file="${args[0]}"
+    args=("${args[@]:1}")
+fi
+
+echo "input file: ${input_file:-\"<None given>\" }"
+
+# If no output file is given, emit the output file in the current working directory
+if [[ -z "${output_file:-}" ]]; then
+    if [[ ${input_file} == *.* ]]; then
+      file_ext=".${input_file##*.}"
+    else
+        file_ext=""
+    fi
+    if [[ "${input_file}" == */* ]]; then
+        output_file="${input_file%.*}.inst${file_ext}"
+        output_file="$(pwd)/${output_file##*/}"
+    else
+        output_file="$(pwd)/${input_file%.*}.inst${file_ext}"
+    fi
+    
+fi
+echo "output file: ${output_file:-\"<None given>\" }"
+echo "Remaining Arguments: ${args[*]}"
+
 # This script invokes an LLVM flang frontend plugin to parse and instrument Fortran code
-flang-new -fc1 -load ./libsalt-flang-plugin.so -plugin salt-instrument "${@}"
+cmd=(flang-new -fc1 -load ./libsalt-flang-plugin.so -plugin salt-instrument "${input_file}" -o "${output_file}" "${args[@]}")
+if $show; then
+    echo "cmd: ${cmd[*]}"
+else
+    echo "Running: ${cmd[*]}"
+    "${cmd[@]}"
+fi
