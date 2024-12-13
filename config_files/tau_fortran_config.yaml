@@ -6,8 +6,8 @@ instrumentation: tauFortran
 program_insert:
   - "      integer, save :: tauProfileTimer(2) = [0, 0]"
   - "      call TAU_PROFILE_INIT()"
-  - "      call TAU_PROFILE_TIMER(tauProfileTimer, &"
-  - "        \"${full_timer_name}\")"
+  - "      call TAU_PROFILE_TIMER(tauProfileTimer, \"&"
+  - "     &${full_timer_name}\")"
   - "      call TAU_PROFILE_START(tauProfileTimer)"
   - "#ifndef TAU_MPI"
   - "      call  TAU_PROFILE_SET_NODE(0);"
@@ -16,8 +16,8 @@ program_insert:
 
 procedure_begin_insert:
   - "      integer, save :: tauProfileTimer(2) = [0, 0]"
-  - "      call TAU_PROFILE_TIMER(tauProfileTimer, &"
-  - "        \"${full_timer_name}\")"
+  - "      call TAU_PROFILE_TIMER(tauProfileTimer, \"&"
+  - "     &${full_timer_name}\")"
   - "      call TAU_PROFILE_START(tauProfileTimer)"
 
 procedure_end_insert:
