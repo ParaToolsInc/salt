@@ -44,6 +44,7 @@ limitations under the License.
 #include "flang/Common/indirection.h"
 
 // TODO Split declarations into a separate header file.
+// TODO Put debug output behind verbose flag
 
 #define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
 #define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/fortran_config.yaml"
@@ -93,7 +94,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
     struct SaltInstrumentParseTreeVisitor {
         explicit SaltInstrumentParseTreeVisitor(Fortran::parser::Parsing *parsing)
-            : parsing(parsing) {
+            : mainProgramLine_(0), subProgramLine_(0), parsing(parsing) {
         }
 
         /**
@@ -165,12 +166,14 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         void Post(const Fortran::parser::ProgramStmt &program) {
             mainProgramName_ = program.v.ToString();
-            //const auto &pos = parsing->allCooked().GetSourcePositionRange(program.v.source);
+            mainProgramLine_ = parsing->allCooked().GetSourcePositionRange(program.v.source)->first.line;
             llvm::outs() << "Enter main program: " << mainProgramName_ << "\n";
         }
 
         bool Pre(const Fortran::parser::SubroutineStmt &subroutineStmt) {
-            subprogramName_ = std::get<Fortran::parser::Name>(subroutineStmt.t).ToString();
+            const auto & name =std::get<Fortran::parser::Name>(subroutineStmt.t);
+            subprogramName_ = name.ToString();
+            subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
             llvm::outs() << "Enter Subroutine: " << subprogramName_ << "\n";
             return true;
         }
@@ -181,7 +184,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
 
         bool Pre(const Fortran::parser::FunctionStmt &functionStmt) {
-            subprogramName_ = std::get<Fortran::parser::Name>(functionStmt.t).ToString();
+            const auto &name = std::get<Fortran::parser::Name>(functionStmt.t);
+            subprogramName_ = name.ToString();
+            subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
             llvm::outs() << "Enter Function: " << subprogramName_ << "\n";
             return true;
         }
@@ -189,9 +194,13 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         void Post(const Fortran::parser::FunctionSubprogram &) {
             llvm::outs() << "Exit Function: " << subprogramName_ << "\n";
             subprogramName_.clear();
+            subProgramLine_ = 0;
         }
 
         // TODO split location-getting routines into a separate file
+
+        // TODO The source position functions can fail if no source position exists
+        //      Need to handle that case better.
 
         [[nodiscard]] Fortran::parser::SourcePosition getLocation(
             const Fortran::parser::OpenMPDeclarativeConstruct &construct,
@@ -483,16 +492,28 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 llvm::outs() << "ExecutionPart num blocks: " << block.size() << "\n";
                 const Fortran::parser::SourcePosition startLoc{getLocation(block.front(), false)};
                 const Fortran::parser::SourcePosition endLoc{getLocation(block.back(), true)};
+                // TODO this assumes that the program end statement ends the next line after
+                //      the last statement, but there could be whitespace/comments. Need to actually
+                //      find the end statement. End statement may not have source position if name
+                //      not listed -- need to find workaround.
+                std::stringstream ss;
+                ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
+                ss << " [{" << startLoc.sourceFile->path() << "} {";
+                ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
+                ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
+                ss << endLoc.line + 1;
+                ss << ",1}]";  // TODO column number, last char of end stmt
+                const std::string timerName{ss.str()};
                 if (isInMainProgram_) {
                     llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", " <<
                             startLoc.column << "\n";
                     addInstrumentationPoint(SaltInstrumentationPointType::PROGRAM_BEGIN, startLoc.line,
-                                            mainProgramName_);
+                                            timerName);
                 } else {
                     llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << ", " <<
                             startLoc.column << "\n";
                     addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_BEGIN, startLoc.line,
-                                            subprogramName_);
+                                            timerName);
                 }
                 llvm::outs() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
                 addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_END, endLoc.line);
@@ -505,7 +526,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         // Keeps track of current state of traversal
         bool isInMainProgram_{false};
         std::string mainProgramName_;
+        int mainProgramLine_;
         std::string subprogramName_;
+        int subProgramLine_;
 
         std::vector<SaltInstrumentationPoint> instrumentationPoints_;
 
@@ -627,6 +650,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
         llvm::outs() << "Have input file: " << *inputFilePath << "\n";
 
+        // Read and parse the yaml configuration file
         const std::string configPath{getConfigPath()};
         const ryml::Tree yamlTree = getConfigYamlTree(configPath);
         const InstrumentationMap instMap = getInstrumentationMap(yamlTree);
