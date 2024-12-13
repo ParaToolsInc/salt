@@ -632,12 +632,18 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         const InstrumentationMap instMap = getInstrumentationMap(yamlTree);
 
         // Get the extension of the input file
-        // For input file 'filename.ext' we will output to 'filename.inst.ext'
+        // For input file 'filename.ext' we will output to 'filename.inst.Ext'
+        // Since we are adding preprocessor directives in the emitted code,
+        // the file extension should be capitalized.
         std::string inputFileExtension;
         if (auto const extPos = inputFilePath->find_last_of('.'); extPos == std::string::npos) {
-            inputFileExtension = "f90"; // Default if for some reason file has no extension
+            inputFileExtension = "F90"; // Default if for some reason file has no extension
         } else {
             inputFileExtension = inputFilePath->substr(extPos + 1); // Part of string past last '.'
+                // Capitalize the first character of inputFileExtension
+            if (!inputFileExtension.empty()) {
+                inputFileExtension[0] = std::toupper(inputFileExtension[0]);
+            }
         }
 
         // Open an output file for writing the instrumented code

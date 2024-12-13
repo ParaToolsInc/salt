@@ -93,10 +93,10 @@ if [[ -z "${output_file:-}" ]]; then
         file_ext=""
     fi
     if [[ "${input_file}" == */* ]]; then
-        output_file="${input_file%.*}.inst${file_ext}"
+        output_file="${input_file%.*}.inst${file_ext//f/F}"
         output_file="$(pwd)/${output_file##*/}"
     else
-        output_file="$(pwd)/${input_file%.*}.inst${file_ext}"
+        output_file="$(pwd)/${input_file%.*}.inst${file_ext//f/F}"
     fi
     
 fi

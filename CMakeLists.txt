@@ -640,34 +640,44 @@ foreach(compiler IN LISTS fortran_compilers_to_test)
   STRING(TOUPPER ${compiler} upper_comp)
   add_test(NAME setup_${compiler}_dir
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${upper_comp})
+  set_tests_properties(setup_${compiler}_dir
+    PROPERTIES
+    FIXTURES_SETUP ${upper_comp}_dir
+  )
 endforeach()
 
 foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
   # Get the name of the instrumented source file
   get_filename_component(TEST_BASE_NAME ${test_source} NAME_WLE)
   get_filename_component(TEST_LANG ${test_source} LAST_EXT)
+  # fparse-llvm is adding preprocessor directives and should emit uppercase file extensions (e.g., .F90)
+  string(TOUPPER ${TEST_LANG} TEST_LANG)
   set(TEST_INST_SOURCE ${TEST_BASE_NAME}.inst${TEST_LANG})
 
   foreach(compiler IN LISTS fortran_compilers_to_test)
     STRING(TOUPPER ${compiler} upper_comp)
     if(${compiler} STREQUAL "gfortran")
       set(mapped_comp GCC)
+      set(EXTRA_FLAGS -Wpedantic -Wextra -Wno-missing-include-dirs -Werror)
     elseif(${compiler} STREQUAL "flang-new")
       set(mapped_comp CLANG)
+      set(EXTRA_FLAGS -Werror)
     elseif(${compiler} STREQUAL "flang")
       set(mapped_comp CLANG)
+      set(EXTRA_FLAGS -Werror)
     else()
       message(FATAL_ERROR "Unknown compiler: ${compiler}")
     endif()
     add_test(NAME compile_${upper_comp}_${test_source}
-      COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} ${CMAKE_BINARY_DIR}/${TEST_INST_SOURCE}
+      COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} -Wall ${EXTRA_FLAGS} ${CMAKE_BINARY_DIR}/${TEST_INST_SOURCE}
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
       )
     set_tests_properties(compile_${upper_comp}_${test_source}
       PROPERTIES
       ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE}"
-      DEPENDS "instrument_${test_source};setup_${compiler}_dir"
-      FAIL_REGULAR_EXPRESSION "[Ee]rror"
+      DEPENDS "instrument_${test_source}"
+      FIXTURES_REQUIRED ${upper_comp}_dir
+      FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
     )
     # Profile with TAU and Verify profiles are created
     add_test(NAME run_${upper_comp}_${test_source}
