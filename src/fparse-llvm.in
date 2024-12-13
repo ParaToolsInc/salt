@@ -21,6 +21,22 @@ set -o pipefail
 #set -o verbose
 #set -o xtrace
 
+# Add a help/usage message function
+function usage {
+    echo "Usage: $0 [-h] [-o output_file] [-show] input_file [args]"
+    echo "         -h: print this help message and exit"    
+    echo "         -o output_file: specify the output file name"
+    echo "         -show: print the command line without running it"
+    echo "          input_file: the Fortran source file to parse and instrument"
+    echo "          args: additional arguments to pass to the flang compiler (include flags etc.)"
+
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 1
+fi
+
 # Loop over the arguments and check for the output file -o flag and it's argument
 # If found, set the output file name to the argument following the -o flag and remove the -o flag and argument from the argument list
 # If not found, set the output file name to the first argument with a .inst extension
@@ -28,8 +44,11 @@ args=()
 expecting_output_file=false
 show=false
 for arg in "$@"; do
-    echo "working on arg: $arg"
-    if $expecting_output_file; then
+    #echo "working on arg: $arg"
+    if [[ $arg == -h ]]; then
+        usage
+        exit 0
+    elif $expecting_output_file; then
         output_file="$arg"
         expecting_output_file=false
         shift || true
@@ -91,4 +110,5 @@ if $show; then
 else
     echo "Running: ${cmd[*]}"
     "${cmd[@]}"
+    exit $?
 fi
