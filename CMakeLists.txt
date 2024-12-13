@@ -669,5 +669,26 @@ foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
       DEPENDS "instrument_${test_source};setup_${compiler}_dir"
       FAIL_REGULAR_EXPRESSION "[Ee]rror"
     )
+    # Profile with TAU and Verify profiles are created
+    add_test(NAME run_${upper_comp}_${test_source}
+      COMMAND ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+    )
+    set_tests_properties(run_${upper_comp}_${test_source}
+      PROPERTIES
+      ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
+      DEPENDS compile_${upper_comp}_${test_source}
+      FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
+    )
+    add_test(NAME check_${upper_comp}_${test_source}_profile
+      COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+    )
+    set_tests_properties(check_${upper_comp}_${test_source}_profile
+      PROPERTIES
+      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
+      FAIL_REGULAR_EXPRESSION "addr=\<0x"
+      DEPENDS run_${upper_comp}_${test_source}
+    )
   endforeach()
 endforeach()
