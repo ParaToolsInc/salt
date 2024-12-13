@@ -592,8 +592,12 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
     }
 
     [[nodiscard]] static std::string getConfigPath() {
+        // If config path env var is set and non-empty, use that;
+        // otherwise use default.
         if (const char *val = getenv(SALT_FORTRAN_CONFIG_FILE_VAR)) {
-            return std::string{val};
+            if (const std::string configPath{val}; !configPath.empty()) {
+                return configPath;
+            }
         }
         return SALT_FORTRAN_CONFIG_DEFAULT_PATH;
     }
@@ -602,7 +606,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         std::ifstream inputStream{configPath};
         if (!inputStream) {
             llvm::errs() << "ERROR: Could not open configuration file " << configPath << "\n"
-                    << "Set " SALT_FORTRAN_CONFIG_FILE_VAR " to path to desired configuration file.\n";
+                    << "Set $" SALT_FORTRAN_CONFIG_FILE_VAR " to path to desired configuration file.\n";
             std::exit(-3);
         }
         std::stringstream configStream;
