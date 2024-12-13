@@ -8,7 +8,7 @@
           do u = 0, 9 
           if (100*h + 10*t + u == h**3 + t**3 + u**3) then
              print "(3I1)", h, t, u 
-	        endif
+          endif
           end do 
         end do 
       end do 
