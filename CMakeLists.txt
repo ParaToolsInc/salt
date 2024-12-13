@@ -357,6 +357,10 @@ find_program(TAUCXX tau_cxx.sh
   PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
   REQUIRED
 )
+find_program(TAUF90 tau_f90.sh
+  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
+  REQUIRED
+)
 file(GLOB TAU_GCC_LIBUNWIND_DIR ${TAU_ARCH_DIR}/libunwind-*-gcc)
 if(NOT TAU_GCC_LIBUNWIND_DIR)
   message(FATAL_ERROR "libunwind not found for TAU's gcc build")
@@ -628,4 +632,42 @@ foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
     ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_fortran_config.yaml"
     PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
   )
+endforeach()
+
+set(fortran_compilers_to_test gfortran flang-new)
+set(TAU_F90_OPTS -optVerbose -optLinkOnly)
+foreach(compiler IN LISTS fortran_compilers_to_test)
+  STRING(TOUPPER ${compiler} upper_comp)
+  add_test(NAME setup_${compiler}_dir
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${upper_comp})
+endforeach()
+
+foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
+  # Get the name of the instrumented source file
+  get_filename_component(TEST_BASE_NAME ${test_source} NAME_WLE)
+  get_filename_component(TEST_LANG ${test_source} LAST_EXT)
+  set(TEST_INST_SOURCE ${TEST_BASE_NAME}.inst${TEST_LANG})
+
+  foreach(compiler IN LISTS fortran_compilers_to_test)
+    STRING(TOUPPER ${compiler} upper_comp)
+    if(${compiler} STREQUAL "gfortran")
+      set(mapped_comp GCC)
+    elseif(${compiler} STREQUAL "flang-new")
+      set(mapped_comp CLANG)
+    elseif(${compiler} STREQUAL "flang")
+      set(mapped_comp CLANG)
+    else()
+      message(FATAL_ERROR "Unknown compiler: ${compiler}")
+    endif()
+    add_test(NAME compile_${upper_comp}_${test_source}
+      COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} ${CMAKE_BINARY_DIR}/${TEST_INST_SOURCE}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+      )
+    set_tests_properties(compile_${upper_comp}_${test_source}
+      PROPERTIES
+      ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE}"
+      DEPENDS "instrument_${test_source};setup_${compiler}_dir"
+      FAIL_REGULAR_EXPRESSION "[Ee]rror"
+    )
+  endforeach()
 endforeach()
