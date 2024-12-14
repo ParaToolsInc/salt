@@ -54,6 +54,8 @@ limitations under the License.
 #define SALT_FORTRAN_PROCEDURE_END_KEY "procedure_end_insert"
 
 #define SALT_FORTRAN_TIMER_NAME_TEMPLATE R"(\$\{full_timer_name\})"
+#define SALT_FORTRAN_STRING_SPLITTER "&\n     &"
+#define SALT_F77_LINE_LENGTH 64
 
 using namespace Fortran::frontend;
 
@@ -503,17 +505,30 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
                 ss << endLoc.line + 1;
                 ss << ",1}]";  // TODO column number, last char of end stmt
+
                 const std::string timerName{ss.str()};
+
+                // Split the timername string so that it will fit between Fortran 77's 72 character limit,
+                // and use character string line continuation syntax compatible with Fortran 77 and modern
+                // Fortran.
+                std::stringstream ss2;
+                for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
+                    ss2 << SALT_FORTRAN_STRING_SPLITTER;
+                    ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
+                }
+
+                const std::string splitTimerName{ss2.str()};
+
                 if (isInMainProgram_) {
                     llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", " <<
                             startLoc.column << "\n";
                     addInstrumentationPoint(SaltInstrumentationPointType::PROGRAM_BEGIN, startLoc.line,
-                                            timerName);
+                                            splitTimerName);
                 } else {
                     llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << ", " <<
                             startLoc.column << "\n";
                     addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_BEGIN, startLoc.line,
-                                            timerName);
+                                            splitTimerName);
                 }
                 llvm::outs() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
                 addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_END, endLoc.line);
