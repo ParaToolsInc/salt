@@ -670,7 +670,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             inputFileExtension = inputFilePath->substr(extPos + 1); // Part of string past last '.'
                 // Capitalize the first character of inputFileExtension
             if (!inputFileExtension.empty()) {
-                inputFileExtension[0] = std::toupper(inputFileExtension[0]);
+                inputFileExtension[0] = static_cast<char>(std::toupper(inputFileExtension[0]));
             }
         }
 
