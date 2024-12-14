@@ -21,6 +21,20 @@ set -o pipefail
 #set -o verbose
 #set -o xtrace
 
+readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
+readonly _FORTRAN_CONFIG_FILE_BUILD=@CMAKE_SOURCE_DIR@/config_files/tau_fortran_config.yaml
+readonly _FORTRAN_CONFIG_FILE_INSTALL=@SALT_CONFIGFILES_INSTALL_DIR@/tau_fortran_config.yaml
+readonly _INSTALL_DEST=@CMAKE_INSTALL_PREFIX@
+
+# get the absolute path of this script
+readonly _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Check if the script is being run from the install directory
+if [[ -f "${_SCRIPT_DIR}/$0" && "${_SCRIPT_DIR}" == ${_INSTALL_DEST}* ]]; then
+    FORTRAN_CONFIG_FILE="${_FORTRAN_CONFIG_FILE_INSTALL}"
+else
+    FORTRAN_CONFIG_FILE="${_FORTRAN_CONFIG_FILE_BUILD}"
+fi
+
 # Add a help/usage message function
 function usage {
     echo "Usage: $0 [-h] [-o output_file] [-show] input_file [args]"
@@ -69,6 +83,10 @@ for arg in "$@"; do
         show=true
         shift || true
         #echo "args remaining: $*"
+    elif [[ $arg == --config_file=* ]]; then
+        FORTRAN_CONFIG_FILE="${arg#--config_file=}"
+        shift || true
+        #echo "args remaining: $*"
     elif [[ -n ${arg:-} ]]; then
         args+=("${arg}")
         shift || true
@@ -104,11 +122,19 @@ echo "output file: ${output_file:-\"<None given>\" }"
 echo "Remaining Arguments: ${args[*]}"
 
 # This script invokes an LLVM flang frontend plugin to parse and instrument Fortran code
-cmd=(flang-new -fc1 -load ./libsalt-flang-plugin.so -plugin salt-instrument "${input_file}" -o "${output_file}" "${args[@]}")
+cmd=(flang-new
+    -fc1
+    -load ./libsalt-flang-plugin.so
+    -plugin salt-instrument
+    "${input_file}" 
+    -o "${output_file}"
+    "${args[@]}")
 if $show; then
+    echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
     echo "cmd: ${cmd[*]}"
 else
+    echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
     echo "Running: ${cmd[*]}"
-    "${cmd[@]}"
+    SALT_FORTRAN_CONFIG_FILE="${FORTRAN_CONFIG_FILE}" "${cmd[@]}"
     exit $?
 fi
