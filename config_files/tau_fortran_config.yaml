@@ -10,8 +10,8 @@ program_insert:
   - "     &${full_timer_name}\")"
   - "      call TAU_PROFILE_START(tauProfileTimer)"
   - "#ifndef TAU_MPI"
-  - "      call  TAU_PROFILE_SET_NODE(0);"
-  - "#endif ! TAU_MPI"
+  - "      call  TAU_PROFILE_SET_NODE(0)"
+  - "#endif"
 
 
 procedure_begin_insert:
