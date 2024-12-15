@@ -39,7 +39,7 @@ fi
 function usage {
     echo "Usage: $0 [-h] [-o output_file] [-show] input_file [args]"
     echo "         -h: print this help message and exit"    
-    echo "         -o output_file: specify the output file name"
+    echo "         --tau_output=output_file: specify the output file name"
     echo "         -show: print the command line without running it"
     echo "          input_file: the Fortran source file to parse and instrument"
     echo "          args: additional arguments to pass to the flang compiler (include flags etc.)"
@@ -54,11 +54,19 @@ fi
 # Loop over the arguments and check for the output file -o flag and it's argument
 # If found, set the output file name to the argument following the -o flag and remove the -o flag and argument from the argument list
 # If not found, set the output file name to the first argument with a .inst extension
+#echo "Passed command line arguments: $*"
+
 args=()
 expecting_output_file=false
+forward_remaining_args=false
 show=false
 for arg in "$@"; do
     #echo "working on arg: $arg"
+    if [[ $forward_remaining_args == true ]]; then
+        args+=("${@}")
+        #echo "args remaining: $*"
+        break
+    fi
     if [[ $arg == -h ]]; then
         usage
         exit 0
@@ -67,12 +75,16 @@ for arg in "$@"; do
         expecting_output_file=false
         shift || true
         #echo "args remaining: $*"
-    elif [[ $arg == -o ]]; then
+    elif [[ $arg == -o || $arg == --tau_output ]]; then
         shift
         expecting_output_file=true
         #echo "args remaining: $*"
     elif [[ $arg == -o* ]]; then
         output_file="${arg#-o}"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_output=* ]]; then
+        output_file="${arg#--tau_output=}"
         shift || true
         #echo "args remaining: $*"
     elif [[ $arg == *.[Ff]90 || $arg == *.[Ff] || $arg == *.[Ff]03 ]]; then
@@ -86,6 +98,10 @@ for arg in "$@"; do
     elif [[ $arg == --config_file=* ]]; then
         FORTRAN_CONFIG_FILE="${arg#--config_file=}"
         shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -- ]]; then
+        shift
+        forward_remaining_args=true
         #echo "args remaining: $*"
     elif [[ -n ${arg:-} ]]; then
         args+=("${arg}")
