@@ -49,6 +49,7 @@ limitations under the License.
 #define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
 #define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/fortran_config.yaml"
 
+#define SALT_FORTRAN_KEY "Fortran"
 #define SALT_FORTRAN_PROGRAM_BEGIN_KEY "program_insert"
 #define SALT_FORTRAN_PROCEDURE_BEGIN_KEY "procedure_begin_insert"
 #define SALT_FORTRAN_PROCEDURE_END_KEY "procedure_end_insert"
@@ -633,21 +634,51 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
     [[nodiscard]] static InstrumentationMap getInstrumentationMap(const ryml::Tree &tree) {
         InstrumentationMap map;
         std::stringstream ss;
-        // TODO validate yaml, print error if field missing
-        for (const ryml::NodeRef child: tree[SALT_FORTRAN_PROGRAM_BEGIN_KEY].children()) {
+
+        // Access the "Fortran" node
+        ryml::NodeRef fortranNode = tree[SALT_FORTRAN_KEY];
+
+        // Validate that the "Fortran" node exists
+        if (!fortranNode.valid()) {
+            llvm::errs() << "ERROR: '" << SALT_FORTRAN_KEY << "' key not found in the configuration file.\n";
+            std::exit(-3);
+        }
+
+        // Access and process the "program_begin_insert" node
+        ryml::NodeRef programBeginNode = fortranNode[SALT_FORTRAN_PROGRAM_BEGIN_KEY];
+        if (!programBeginNode.valid()) {
+            llvm::errs() << "ERROR: '" << SALT_FORTRAN_PROGRAM_BEGIN_KEY << "' key not found under 'Fortran'.\n";
+            std::exit(-3);
+        }
+        for (const ryml::NodeRef child : programBeginNode.children()) {
             ss << child.val() << "\n";
         }
         map.emplace(SaltInstrumentationPointType::PROGRAM_BEGIN, ss.str());
         ss.str(""s);
-        for (const ryml::NodeRef child: tree[SALT_FORTRAN_PROCEDURE_BEGIN_KEY].children()) {
+
+        // Access and process the "procedure_begin_insert" node
+        ryml::NodeRef procedureBeginNode = fortranNode[SALT_FORTRAN_PROCEDURE_BEGIN_KEY];
+        if (!procedureBeginNode.valid()) {
+            llvm::errs() << "ERROR: '" << SALT_FORTRAN_PROCEDURE_BEGIN_KEY << "' key not found under 'Fortran'.\n";
+            std::exit(-3);
+        }
+        for (const ryml::NodeRef child : procedureBeginNode.children()) {
             ss << child.val() << "\n";
         }
         map.emplace(SaltInstrumentationPointType::PROCEDURE_BEGIN, ss.str());
         ss.str(""s);
-        for (const ryml::NodeRef child: tree[SALT_FORTRAN_PROCEDURE_END_KEY].children()) {
+
+        // Access and process the "procedure_end_insert" node
+        ryml::NodeRef procedureEndNode = fortranNode[SALT_FORTRAN_PROCEDURE_END_KEY];
+        if (!procedureEndNode.valid()) {
+            llvm::errs() << "ERROR: '" << SALT_FORTRAN_PROCEDURE_END_KEY << "' key not found under 'Fortran'.\n";
+            std::exit(-3);
+        }
+        for (const ryml::NodeRef child : procedureEndNode.children()) {
             ss << child.val() << "\n";
         }
         map.emplace(SaltInstrumentationPointType::PROCEDURE_END, ss.str());
+
         return map;
     }
 
