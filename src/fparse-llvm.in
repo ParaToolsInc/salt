@@ -101,7 +101,10 @@ for arg in "$@"; do
         #echo "args remaining: $*"
     elif [[ $arg == -- ]]; then
         shift
-        forward_remaining_args=true
+        #forward_remaining_args=true
+        #echo "args remaining: $*"
+    elif [[ $arg == -fPIC ]]; then
+        shift || true
         #echo "args remaining: $*"
     elif [[ -n ${arg:-} ]]; then
         args+=("${arg}")
