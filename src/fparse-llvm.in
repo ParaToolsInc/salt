@@ -106,6 +106,9 @@ for arg in "$@"; do
     elif [[ $arg == -fPIC ]]; then
         shift || true
         #echo "args remaining: $*"
+    elif [[ $arg == -g ]]; then
+        shift || true
+        #echo "args remaining: $*"
     elif [[ -n ${arg:-} ]]; then
         args+=("${arg}")
         shift || true
