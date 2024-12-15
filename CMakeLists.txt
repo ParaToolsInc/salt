@@ -629,7 +629,7 @@ foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
   set_tests_properties(instrument_${test_source}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_BINARY_DIR}/fparse-llvm"
-    ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_fortran_config.yaml"
+    ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml"
     PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
   )
 endforeach()

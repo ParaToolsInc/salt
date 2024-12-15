@@ -22,8 +22,8 @@ set -o pipefail
 #set -o xtrace
 
 readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
-readonly _FORTRAN_CONFIG_FILE_BUILD=@CMAKE_SOURCE_DIR@/config_files/tau_fortran_config.yaml
-readonly _FORTRAN_CONFIG_FILE_INSTALL=@SALT_CONFIGFILES_INSTALL_DIR@/tau_fortran_config.yaml
+readonly _FORTRAN_CONFIG_FILE_BUILD=@CMAKE_SOURCE_DIR@/config_files/tau_config.yaml
+readonly _FORTRAN_CONFIG_FILE_INSTALL=@SALT_CONFIGFILES_INSTALL_DIR@/tau_config.yaml
 readonly _INSTALL_DEST=@CMAKE_INSTALL_PREFIX@
 
 # get the absolute path of this script

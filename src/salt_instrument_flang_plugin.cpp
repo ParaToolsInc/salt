@@ -47,7 +47,7 @@ limitations under the License.
 // TODO Put debug output behind verbose flag
 
 #define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
-#define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/fortran_config.yaml"
+#define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/tau_config.yaml"
 
 #define SALT_FORTRAN_KEY "Fortran"
 #define SALT_FORTRAN_PROGRAM_BEGIN_KEY "program_insert"
