@@ -10,4 +10,4 @@ set -o verbose
 
 cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
 cmake --build build --parallel 8 --verbose || cmake --build build --verbose
-#( cd build && ( ctest -j --output-on-failure || ctest --rerun-failed --verbose ) )
+( cd build && ( ctest -j --output-on-failure || ctest --rerun-failed --verbose ) )
