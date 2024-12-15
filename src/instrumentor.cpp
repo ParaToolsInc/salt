@@ -1126,9 +1126,16 @@ void instrumentor::instrument()
         ryml::Tree yaml_tree;
         if (FILE *config_file = fopen(configfile.c_str(), "r"))
         {
-            std::string contents = file_get_contents(config_file);
-            yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(contents));
-            ryml::emit(yaml_tree, yaml_tree.root_id(), config_file);
+            std::ifstream inputStream{configfile.c_str()};
+            if (!inputStream) {
+                llvm::errs() << "ERROR: Could not open configuration file " << configfile.c_str() << "\n";
+                std::exit(-3);
+            }
+            std::stringstream configStream;
+            configStream << inputStream.rdbuf();
+            // TODO handle errors if config yaml doesn't parse
+            yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(configStream.str()));
+
             fclose(config_file);
         }
         else
