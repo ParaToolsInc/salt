@@ -104,6 +104,7 @@ for arg in "$@"; do
         FORTRAN_CONFIG_FILE="${arg#--config_file=}"
         shift || true
         #echo "args remaining: $*"
+    # Begin sanitizing options/flags that cause the frontend plugin to throw an error
     elif [[ $arg == -- ]]; then
         shift
         #forward_remaining_args=true
@@ -112,6 +113,18 @@ for arg in "$@"; do
         shift || true
         #echo "args remaining: $*"
     elif [[ $arg == -g ]]; then
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -c ]]; then
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -s ]]; then
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -shared || $arg == -static ]]; then
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == -Wl,* ]]; then
         shift || true
         #echo "args remaining: $*"
     elif [[ -n ${arg:-} ]]; then
