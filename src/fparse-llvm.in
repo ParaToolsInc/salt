@@ -21,18 +21,23 @@ set -o pipefail
 #set -o verbose
 #set -o xtrace
 
+readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
 readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
 readonly _FORTRAN_CONFIG_FILE_BUILD=@CMAKE_SOURCE_DIR@/config_files/tau_config.yaml
 readonly _FORTRAN_CONFIG_FILE_INSTALL=@SALT_CONFIGFILES_INSTALL_DIR@/tau_config.yaml
 readonly _INSTALL_DEST=@CMAKE_INSTALL_PREFIX@
+readonly _SALT_PLUGIN_SO_BUILD=@CMAKE_BINARY_DIR@/${_SALTFM_PLUGIN_SO}
+readonly _SALT_PLUGIN_SO_INSTALL=@SALT_PLUGIN_INSTALL_DIR@/${_SALTFM_PLUGIN_SO}
 
 # get the absolute path of this script
 readonly _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Check if the script is being run from the install directory
 if [[ -f "${_SCRIPT_DIR}/$0" && "${_SCRIPT_DIR}" == ${_INSTALL_DEST}* ]]; then
     FORTRAN_CONFIG_FILE="${_FORTRAN_CONFIG_FILE_INSTALL}"
+    SALT_PLUGIN_SO="${_SALT_PLUGIN_SO_INSTALL}"
 else
     FORTRAN_CONFIG_FILE="${_FORTRAN_CONFIG_FILE_BUILD}"
+    SALT_PLUGIN_SO="${_SALT_PLUGIN_SO_BUILD}"
 fi
 
 # Add a help/usage message function
@@ -51,22 +56,105 @@ if [[ $# -eq 0 ]]; then
     exit 1
 fi
 
+# Set a whitelist of flags that can be passed to the flang frontend plugin
+# This is where libtooling for flang could help
+# List derived from output of `flang-new -fc1 -help`
+declare -a -r _WHITELISTED_FLAGS=( 
+  -cpp
+  -dM
+  -E
+  -falternative-parameter-statement
+  -fbackslash
+  -fcolor-diagnostics
+  -ffixed-form
+  -ffree-form
+  -fimplicit-none
+  -flogical-abbreviations
+  -fno-reformat
+  -fopenacc
+  -fopenmp-is-target-device
+  -fopenmp-target-debug
+  -fopenmp
+  -fsyntax-only
+  -funderscoring
+  -fxor-operator
+  -help
+  -init-only
+  -nocpp
+  -pedantic
+  -pthread
+  -P
+  -save-temps
+  -S
+  -version
+  -w
+  "-ffixed-line-length=.*"
+  "-finput-charset=.*"
+  "-fopenmp-version=.*"
+  "-save-temps=.*"
+  "-std=.*"
+)
+_WHITELISTED_REGEX="(${_WHITELISTED_FLAGS[0]})"
+# Loop over the secend element of _WHITELISTED_FLAGS to the end and add them to the regex
+for flag in "${_WHITELISTED_FLAGS[@]:1}"; do
+    _WHITELISTED_REGEX="${_WHITELISTED_REGEX}|(${flag})"
+done
+declare -r -a _BLACKLISTED_FLAGS=(
+    "-Wl,.*"
+    "--"
+)
+_BLACKLISTED_REGEX="(${_BLACKLISTED_FLAGS[0]})"
+for flag in "${_BLACKLISTED_FLAGS[@]:1}"; do
+    _BLACKLISTED_REGEX="${_BLACKLISTED_REGEX}|(${flag})"
+done
+declare -r -a _WHITELISTED_FLAGS_WARNING_ARG=(
+    "-W[^l].*"
+)
+_WHITELISTED_WARNING_REGEX="(${_WHITELISTED_FLAGS_WARNING_ARG[0]})"
+for flag in "${_WHITELISTED_FLAGS_WARNING_ARG[@]:1}"; do
+    _WHITELISTED_WARNING_REGEX="${_WHITELISTED_WARNING_REGEX}|(${flag})"
+done
+declare -r -a _WHITELISTED_FLAGS_MAYBE_SPACE_ARG=(
+    "-I"
+    "-J"
+    "-D"
+    "-U"
+)
+for flag in "${_WHITELISTED_FLAGS_MAYBE_SPACE_ARG[@]}"; do
+    _WHITELISTED_REGEX="${_WHITELISTED_REGEX}|(${flag}.+)"
+done
+
+declare -r -a _WHITELISTED_FLAGS_YES_SPACE_ARG=(
+    "-module-dir"
+    "-module-suffix"
+    "-x"
+)
+_WHITELISTED_OPT_ARG_REGEX="(${_WHITELISTED_FLAGS_YES_SPACE_ARG[0]})"
+for flag in "${_WHITELISTED_FLAGS_YES_SPACE_ARG[@]:1}"; do
+    _WHITELISTED_OPT_ARG_REGEX="${_WHITELISTED_OPT_ARG_REGEX}|(${flag})"
+done
+for flag in "${_WHITELISTED_FLAGS_MAYBE_SPACE_ARG[@]}"; do
+    _WHITELISTED_OPT_ARG_REGEX="${_WHITELISTED_OPT_ARG_REGEX}|(${flag})"
+done
+
+# echo "WHITELISTED_REGEX: ${_WHITELISTED_REGEX}"
+# echo "BLACKLISTED_REGEX: ${_BLACKLISTED_REGEX}"
+# echo "WHITELISTED_WARNING_REGEX: ${_WHITELISTED_WARNING_REGEX}"
+# echo "WHITELISTED_OPT_ARG_REGEX: ${_WHITELISTED_OPT_ARG_REGEX}"
+
+
 # Loop over the arguments and check for the output file -o flag and it's argument
 # If found, set the output file name to the argument following the -o flag and remove the -o flag and argument from the argument list
 # If not found, set the output file name to the first argument with a .inst extension
 #echo "Passed command line arguments: $*"
 
 args=()
+original_args=("$@")
 expecting_output_file=false
-forward_remaining_args=false
+expecting_arg_to_forward=false
 show=false
 for arg in "$@"; do
     #echo "working on arg: $arg"
-    if [[ $forward_remaining_args == true ]]; then
-        args+=("${@}")
-        #echo "args remaining: $*"
-        break
-    fi
     if [[ $arg == -h ]]; then
         usage
         exit 0
@@ -75,13 +163,14 @@ for arg in "$@"; do
         expecting_output_file=false
         shift || true
         #echo "args remaining: $*"
-    elif [[ $arg == -o || $arg == --tau_output ]]; then
+    elif $expecting_arg_to_forward; then
+        args+=("$arg")
+        expecting_arg_to_forward=false
+        shift
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_output ]]; then
         shift
         expecting_output_file=true
-        #echo "args remaining: $*"
-    elif [[ $arg == -o* ]]; then
-        output_file="${arg#-o}"
-        shift || true
         #echo "args remaining: $*"
     elif [[ $arg == --tau_output=* ]]; then
         output_file="${arg#--tau_output=}"
@@ -99,20 +188,30 @@ for arg in "$@"; do
         FORTRAN_CONFIG_FILE="${arg#--config_file=}"
         shift || true
         #echo "args remaining: $*"
-    elif [[ $arg == -- ]]; then
-        shift
-        #forward_remaining_args=true
-        #echo "args remaining: $*"
-    elif [[ $arg == -fPIC ]]; then
+    # Begin sanitizing options/flags that cause the frontend plugin to throw an error
+    elif [[ ${arg:-} =~ $_BLACKLISTED_REGEX ]]; then
         shift || true
-        #echo "args remaining: $*"
-    elif [[ $arg == -g ]]; then
+        echo "Removed blacklisted flag: $arg"
+    elif [[ "${arg:-}" =~ $_WHITELISTED_WARNING_REGEX ]]; then
+        # Only safe to do after ensuring -Wl,* blacklisted flag is removed
+        if [[ "${arg:-}" == -Werror ]]; then
+            args+=("$arg")
+        fi
+        # Flang frontend oesn't (yet) support -Wall, -Wextra, etc. only -Werror, so throw others away
         shift || true
-        #echo "args remaining: $*"
-    elif [[ -n ${arg:-} ]]; then
-        args+=("${arg}")
+        #echo "Added whitelisted warning flag: $arg"
+    elif [[ ${arg:-} =~ ${_WHITELISTED_REGEX} ]]; then
+        args+=("$arg")
         shift || true
-        #echo "args remaining: $*"
+        #echo "Added whitelisted flag: $arg"
+    elif [[ ${arg:-} =~ ${_WHITELISTED_OPT_ARG_REGEX} ]]; then
+        args+=("$arg")
+        expecting_arg_to_forward=true
+        shift || true
+        #echo "Added whitelisted flag with argument: $arg"
+    else
+        echo "Removed unknown flag: $arg"
+        shift || true
     fi
 done
 
@@ -146,7 +245,7 @@ echo "Remaining Arguments: ${args[*]}"
 # This script invokes an LLVM flang frontend plugin to parse and instrument Fortran code
 cmd=(flang-new
     -fc1
-    -load ./libsalt-flang-plugin.so
+    -load "${SALT_PLUGIN_SO}"
     -plugin salt-instrument
     "${input_file}" 
     -o "${output_file}"
