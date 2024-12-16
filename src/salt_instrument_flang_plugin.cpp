@@ -69,7 +69,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
     enum class SaltInstrumentationPointType {
         PROGRAM_BEGIN, // Declare profiler, initialize TAU, set node, start timer
         PROCEDURE_BEGIN, // Declare profiler, start timer
-        PROCEDURE_END // Stop timer
+        PROCEDURE_END, // Stop timer on the line after
+        RETURN_STMT //  Stop timer on the line before
     };
 
     typedef std::map<SaltInstrumentationPointType, const std::string> InstrumentationMap;
@@ -84,8 +85,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
 
         [[nodiscard]] bool instrumentBefore() const {
-            return instrumentationPointType == SaltInstrumentationPointType::PROGRAM_BEGIN || instrumentationPointType
-                   == SaltInstrumentationPointType::PROCEDURE_BEGIN;
+            return instrumentationPointType == SaltInstrumentationPointType::PROGRAM_BEGIN
+                    || instrumentationPointType == SaltInstrumentationPointType::PROCEDURE_BEGIN
+                    || instrumentationPointType == SaltInstrumentationPointType::RETURN_STMT;
         }
 
 
@@ -488,55 +490,86 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 }, construct.u);
         }
 
+        // Split handling of ExecutionPart into two phases
+        // so that we insert Instrumentation Points in order
+        // even if we separately insert them in visitors for
+        // children of ExecutionPart.
         bool Pre(const Fortran::parser::ExecutionPart &executionPart) {
+            handleExecutionPart(executionPart, true);
+            return true;
+        }
+
+        void Post(const Fortran::parser::ExecutionPart &executionPart) {
+            handleExecutionPart(executionPart, false);
+        }
+
+        void handleExecutionPart(const Fortran::parser::ExecutionPart &executionPart, bool pre) {
             if (const Fortran::parser::Block &block = executionPart.v; block.empty()) {
                 llvm::outs() << "WARNING: Execution part empty.\n";
             } else {
-                llvm::outs() << "ExecutionPart num blocks: " << block.size() << "\n";
                 const Fortran::parser::SourcePosition startLoc{getLocation(block.front(), false)};
                 const Fortran::parser::SourcePosition endLoc{getLocation(block.back(), true)};
-                // TODO this assumes that the program end statement ends the next line after
-                //      the last statement, but there could be whitespace/comments. Need to actually
-                //      find the end statement. End statement may not have source position if name
-                //      not listed -- need to find workaround.
-                std::stringstream ss;
-                ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
-                ss << " [{" << startLoc.sourceFile->path() << "} {";
-                ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
-                ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
-                ss << endLoc.line + 1;
-                ss << ",1}]";  // TODO column number, last char of end stmt
 
-                const std::string timerName{ss.str()};
+                // Insert the timer start in the Pre phase (when we first visit the node)
+                // and the timer stop in the Post phase (when we return after visiting the node's children).
+                if (pre) {
+                    // TODO this assumes that the program end statement ends the next line after
+                    //      the last statement, but there could be whitespace/comments. Need to actually
+                    //      find the end statement. End statement may not have source position if name
+                    //      not listed -- need to find workaround.
+                    std::stringstream ss;
+                    ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
+                    ss << " [{" << startLoc.sourceFile->path() << "} {";
+                    ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
+                    ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
+                    ss << endLoc.line + 1;
+                    ss << ",1}]";  // TODO column number, last char of end stmt
 
-                // Split the timername string so that it will fit between Fortran 77's 72 character limit,
-                // and use character string line continuation syntax compatible with Fortran 77 and modern
-                // Fortran.
-                std::stringstream ss2;
-                for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
-                    ss2 << SALT_FORTRAN_STRING_SPLITTER;
-                    ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
-                }
+                    const std::string timerName{ss.str()};
 
-                const std::string splitTimerName{ss2.str()};
+                    // Split the timername string so that it will fit between Fortran 77's 72 character limit,
+                    // and use character string line continuation syntax compatible with Fortran 77 and modern
+                    // Fortran.
+                    std::stringstream ss2;
+                    for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
+                        ss2 << SALT_FORTRAN_STRING_SPLITTER;
+                        ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
+                    }
 
-                if (isInMainProgram_) {
-                    llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", " <<
-                            startLoc.column << "\n";
-                    addInstrumentationPoint(SaltInstrumentationPointType::PROGRAM_BEGIN, startLoc.line,
-                                            splitTimerName);
+                    const std::string splitTimerName{ss2.str()};
+
+                    if (isInMainProgram_) {
+                        llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", " <<
+                                startLoc.column << "\n";
+                        addInstrumentationPoint(SaltInstrumentationPointType::PROGRAM_BEGIN, startLoc.line,
+                                                splitTimerName);
+                    } else {
+                        llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << ", " <<
+                                startLoc.column << "\n";
+                        addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_BEGIN, startLoc.line,
+                                                splitTimerName);
+                    }
                 } else {
-                    llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line << ", " <<
-                            startLoc.column << "\n";
-                    addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_BEGIN, startLoc.line,
-                                            splitTimerName);
+                    llvm::outs() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
+                    addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_END, endLoc.line);
                 }
-                llvm::outs() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
-                addInstrumentationPoint(SaltInstrumentationPointType::PROCEDURE_END, endLoc.line);
             }
+        }
 
+        // A ReturnStmt does not have a source, so we instead need to get access to the wrapper Statement that does.
+        // Here we get the ReturnStmt through ExecutableConstruct -> Statement<ActionStmt> -> Indirection<ReturnStmt>
+        bool Pre(const Fortran::parser::ExecutableConstruct & execConstruct) {
+            if (const auto actionStmt = std::get_if<Fortran::parser::Statement<Fortran::parser::ActionStmt> >(
+                &execConstruct.u)) {
+                if (std::holds_alternative<Fortran::common::Indirection<Fortran::parser::ReturnStmt>>(actionStmt->statement.u)) {
+                    const Fortran::parser::SourcePosition returnPos{ locationFromSource(actionStmt->source, false)};
+                    llvm::outs() << "Return statement at " << returnPos.line << "\n";
+                    addInstrumentationPoint(SaltInstrumentationPointType::RETURN_STMT, returnPos.line);
+                }
+            }
             return true;
         }
+
 
     private:
         // Keeps track of current state of traversal
@@ -573,9 +606,10 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
     [[nodiscard]] static std::string getInstrumentationPointString(const SaltInstrumentationPoint & instPt,
                                                                    const InstrumentationMap &instMap) {
+        static std::regex timerNameRegex{SALT_FORTRAN_TIMER_NAME_TEMPLATE};
         std::string instTemplate = instMap.at(instPt.instrumentationPointType);
         if (instPt.timerName.has_value()) {
-            instTemplate = std::regex_replace(instTemplate, std::regex(SALT_FORTRAN_TIMER_NAME_TEMPLATE),
+            instTemplate = std::regex_replace(instTemplate, timerNameRegex,
                                               instPt.timerName.value());
         }
         return instTemplate;
@@ -678,6 +712,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             ss << child.val() << "\n";
         }
         map.emplace(SaltInstrumentationPointType::PROCEDURE_END, ss.str());
+        // The return statement uses the same text as procedure end,
+        // but is inserted before the line instead of after.
+        map.emplace(SaltInstrumentationPointType::RETURN_STMT, ss.str());
 
         return map;
     }
