@@ -21,18 +21,23 @@ set -o pipefail
 #set -o verbose
 #set -o xtrace
 
+readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
 readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
 readonly _FORTRAN_CONFIG_FILE_BUILD=@CMAKE_SOURCE_DIR@/config_files/tau_config.yaml
 readonly _FORTRAN_CONFIG_FILE_INSTALL=@SALT_CONFIGFILES_INSTALL_DIR@/tau_config.yaml
 readonly _INSTALL_DEST=@CMAKE_INSTALL_PREFIX@
+readonly _SALT_PLUGIN_SO_BUILD=@CMAKE_BINARY_DIR@/${_SALTFM_PLUGIN_SO}
+readonly _SALT_PLUGIN_SO_INSTALL=@SALT_PLUGIN_INSTALL_DIR@/${_SALTFM_PLUGIN_SO}
 
 # get the absolute path of this script
 readonly _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Check if the script is being run from the install directory
 if [[ -f "${_SCRIPT_DIR}/$0" && "${_SCRIPT_DIR}" == ${_INSTALL_DEST}* ]]; then
     FORTRAN_CONFIG_FILE="${_FORTRAN_CONFIG_FILE_INSTALL}"
+    SALT_PLUGIN_SO="${_SALT_PLUGIN_SO_INSTALL}"
 else
     FORTRAN_CONFIG_FILE="${_FORTRAN_CONFIG_FILE_BUILD}"
+    SALT_PLUGIN_SO="${_SALT_PLUGIN_SO_BUILD}"
 fi
 
 # Add a help/usage message function
@@ -146,7 +151,7 @@ echo "Remaining Arguments: ${args[*]}"
 # This script invokes an LLVM flang frontend plugin to parse and instrument Fortran code
 cmd=(flang-new
     -fc1
-    -load ./libsalt-flang-plugin.so
+    -load "${SALT_PLUGIN_SO}"
     -plugin salt-instrument
     "${input_file}" 
     -o "${output_file}"
