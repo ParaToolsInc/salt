@@ -19,8 +19,8 @@ module load llvm/git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9_19.1.4-zpacv56
 module load gcc/14.2.0-ttkqi3s
 echo "loading ninja"
 module load ninja
-echo "loading tau"
-module load tau/2.34
+#echo "loading tau"
+module load /packages/salt-fm/modules/tau/2.34
 echo "listing loaded modules:"
 module list
 echo "Finished"
