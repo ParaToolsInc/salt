@@ -12,10 +12,9 @@ echo "purging loaded modules"
 module purge
 echo "listing loaded modules:"
 module list
-#echo "loading llvm and mpich:"
-echo "loading llvm and gcc:"
+echo "loading llvm, gcc and mpich:"
 module load llvm/git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9_19.1.4-zpacv56
-#module load mpich/4.2.3-ugxzfxf
+module load mpich/4.2.3-ugxzfxf
 module load gcc/14.2.0-ttkqi3s
 echo "loading ninja"
 module load ninja
