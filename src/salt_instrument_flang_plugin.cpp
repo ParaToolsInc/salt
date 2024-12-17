@@ -90,6 +90,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                    || instrumentationPointType == SaltInstrumentationPointType::RETURN_STMT;
         }
 
+        bool operator<(const SaltInstrumentationPoint &other) const {
+            return startLine < other.startLine;
+        }
 
         SaltInstrumentationPointType instrumentationPointType;
         int startLine;
