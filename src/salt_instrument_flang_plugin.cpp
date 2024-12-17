@@ -91,6 +91,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
 
         bool operator<(const SaltInstrumentationPoint &other) const {
+            if (startLine == other.startLine) {
+                return instrumentBefore();
+            }
             return startLine < other.startLine;
         }
 
@@ -210,9 +213,6 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         // TODO split location-getting routines into a separate file
 
-        // TODO The source position functions can fail if no source position exists
-        //      Need to handle that case better.
-
         [[nodiscard]] std::optional<Fortran::parser::SourcePosition> getLocation(
             const Fortran::parser::OpenMPDeclarativeConstruct &construct,
             const bool end) {
@@ -282,7 +282,14 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                     },
                     [&](const Fortran::parser::OpenACCLoopConstruct &c) -> std::optional<
                 Fortran::parser::SourcePosition> {
-                        // TODO handle end case (complicated because end statement and do construct are optional)
+                        if (end) {
+                            if (const auto &maybeDo = std::get<std::optional<Fortran::parser::DoConstruct> >(c.t);
+                                maybeDo.has_value()) {
+                                return locationFromSource(
+                                    std::get<Fortran::parser::Statement<Fortran::parser::EndDoStmt> >(maybeDo.value().t).
+                                    source, end);
+                            }
+                        }
                         return locationFromSource(std::get<Fortran::parser::AccBeginLoopDirective>(c.t).source, end);
                     },
                 }, construct.u);
@@ -651,6 +658,12 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         std::string line;
         int lineNum{0};
         const auto &instPts{visitor.getInstrumentationPoints()};
+
+        // Sanity check: are instrumentation points in the right order?
+        if (!std::is_sorted(instPts.cbegin(), instPts.cend())) {
+            DIE("ERROR: Instrumentation points not sorted by line number!\n");
+        }
+
         auto instIter{instPts.cbegin()};
         while (std::getline(inputStream, line)) {
             ++lineNum;
