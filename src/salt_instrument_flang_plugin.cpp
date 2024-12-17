@@ -125,13 +125,15 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
          * If `end` is set, returns the ending position of the block.
          * If `end` is not set (and by default), returns the starting position of the block.
          */
-        [[nodiscard]] Fortran::parser::SourcePosition locationFromSource(
+        [[nodiscard]] std::optional<Fortran::parser::SourcePosition> locationFromSource(
             const Fortran::parser::CharBlock &charBlock, const bool end) const {
-            const auto &sourceRange{parsing->allCooked().GetSourcePositionRange(charBlock)};
-            if (end) {
-                return sourceRange->second;
+            if (const auto &sourceRange{parsing->allCooked().GetSourcePositionRange(charBlock)}; sourceRange.has_value()) {
+                if (end) {
+                    return sourceRange->second;
+                }
+                return sourceRange->first;
             }
-            return sourceRange->first;
+            return std::nullopt;
         }
 
         // Default empty visit functions for otherwise unhandled types.
@@ -207,37 +209,37 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         // TODO The source position functions can fail if no source position exists
         //      Need to handle that case better.
 
-        [[nodiscard]] Fortran::parser::SourcePosition getLocation(
+        [[nodiscard]] std::optional<Fortran::parser::SourcePosition> getLocation(
             const Fortran::parser::OpenMPDeclarativeConstruct &construct,
             const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
-                [&](const auto &o) -> Fortran::parser::SourcePosition {
+                [&](const auto &o) -> std::optional<Fortran::parser::SourcePosition> {
                     return locationFromSource(o.source, end);
                 },
                 construct.u);
         }
 
-        [[nodiscard]] Fortran::parser::SourcePosition getLocation(const Fortran::parser::OpenMPConstruct &construct,
+        [[nodiscard]] std::optional<Fortran::parser::SourcePosition> getLocation(const Fortran::parser::OpenMPConstruct &construct,
                                                                   const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
                 Fortran::common::visitors{
-                    [&](const Fortran::parser::OpenMPStandaloneConstruct &c) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::OpenMPStandaloneConstruct &c) -> std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.source, end);
                     },
                     // OpenMPSectionsConstruct, OpenMPLoopConstruct,
                     // OpenMPBlockConstruct, OpenMPCriticalConstruct Get the source from
                     // the directive field.
-                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                    [&](const auto &c) -> std::optional<Fortran::parser::SourcePosition> {
                         const Fortran::parser::CharBlock &source{std::get<0>(c.t).source};
                         return locationFromSource(source, end);
                     },
-                    [&](const Fortran::parser::OpenMPAtomicConstruct &c) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::OpenMPAtomicConstruct &c) -> std::optional<Fortran::parser::SourcePosition> {
                         return std::visit(
-                            [&](const auto &o) -> Fortran::parser::SourcePosition {
+                            [&](const auto &o) -> std::optional<Fortran::parser::SourcePosition> {
                                 const Fortran::parser::CharBlock &source{
                                     std::get<Fortran::parser::Verbatim>(o.t).source
                                 };
@@ -245,7 +247,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             },
                             c.u);
                     },
-                    [&](const Fortran::parser::OpenMPSectionConstruct &c) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::OpenMPSectionConstruct &c) -> std::optional<Fortran::parser::SourcePosition> {
                         const Fortran::parser::CharBlock &source{c.source};
                         return locationFromSource(source, end);
                     },
@@ -253,30 +255,30 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 construct.u);
         }
 
-        [[nodiscard]] Fortran::parser::SourcePosition
+        [[nodiscard]] std::optional<Fortran::parser::SourcePosition>
         getLocation(const Fortran::parser::OpenACCConstruct &construct, const bool end) {
             // This function is based on the equivalent function in
             // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
             return std::visit(
                 Fortran::common::visitors{
-                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                    [&](const auto &c) -> std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.source, end);
                     },
-                    [&](const Fortran::parser::OpenACCBlockConstruct &c) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::OpenACCBlockConstruct &c) -> std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(std::get<Fortran::parser::AccEndBlockDirective>(c.t).source,
                                                       end);
                         }
                         return locationFromSource(std::get<Fortran::parser::AccBeginBlockDirective>(c.t).source, end);
                     },
-                    [&](const Fortran::parser::OpenACCLoopConstruct &c) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::OpenACCLoopConstruct &c) -> std::optional<Fortran::parser::SourcePosition> {
                         // TODO handle end case (complicated because end statement and do construct are optional)
                         return locationFromSource(std::get<Fortran::parser::AccBeginLoopDirective>(c.t).source, end);
                     },
                 }, construct.u);
         }
 
-        [[nodiscard]] Fortran::parser::SourcePosition getLocation(const Fortran::parser::ExecutableConstruct &construct,
+        [[nodiscard]] std::optional<Fortran::parser::SourcePosition> getLocation(const Fortran::parser::ExecutableConstruct &construct,
                                                                   const bool end) {
             /* Possibilities for ExecutableConstruct:
                  Statement<ActionStmt>
@@ -302,11 +304,11 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             */
             return std::visit(
                 Fortran::common::visitors{
-                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                    [&](const auto &c) -> std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CUFKernelDoConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             const auto &optionalConstruct = std::get<std::optional<Fortran::parser::DoConstruct> >(
                                 c.value().t);
@@ -320,27 +322,27 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             std::get<Fortran::parser::CUFKernelDoConstruct::Directive>(c.value().t).source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OmpEndLoopDirective> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.value().source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OpenMPConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         return getLocation(c.value(), end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::AccEndCombinedDirective> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.value().source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::OpenACCConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         return getLocation(c.value(), end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CompilerDirective> &c)->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.value().source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::ForallConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndForallStmt> >(c.value().t).
@@ -351,7 +353,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::WhereConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndWhereStmt> >(c.value().t).
@@ -362,7 +364,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::SelectTypeConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndSelectStmt> >(c.value().t).
@@ -373,7 +375,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::SelectRankConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndSelectStmt> >(c.value().t).
@@ -384,7 +386,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::IfConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndIfStmt> >(c.value().t).source,
@@ -395,7 +397,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::DoConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndDoStmt> >(c.value().t).source,
@@ -406,7 +408,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CriticalConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndCriticalStmt> >(c.value().t).
@@ -418,7 +420,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::ChangeTeamConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndChangeTeamStmt> >(c.value().t).
@@ -430,7 +432,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::CaseConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndSelectStmt> >(c.value().t).
@@ -441,7 +443,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::BlockConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndBlockStmt> >(c.value().t).
@@ -452,7 +454,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             std::get<Fortran::parser::Statement<Fortran::parser::BlockStmt> >(c.value().t).source, end);
                     },
                     [&](const Fortran::common::Indirection<Fortran::parser::AssociateConstruct> &c) ->
-                Fortran::parser::SourcePosition {
+                std::optional<Fortran::parser::SourcePosition> {
                         if (end) {
                             return locationFromSource(
                                 std::get<Fortran::parser::Statement<Fortran::parser::EndAssociateStmt> >(c.value().t).
@@ -465,7 +467,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 }, construct.u);
         }
 
-        [[nodiscard]] Fortran::parser::SourcePosition getLocation(
+        [[nodiscard]] std::optional<Fortran::parser::SourcePosition> getLocation(
             const Fortran::parser::ExecutionPartConstruct &construct,
             const bool end) {
             /* Possibilities for ExecutionPartConstruct:
@@ -478,13 +480,13 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
              */
             return std::visit(
                 Fortran::common::visitors{
-                    [&](const Fortran::parser::ExecutableConstruct &c) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::ExecutableConstruct &c) -> std::optional<Fortran::parser::SourcePosition> {
                         return getLocation(c, end);
                     },
-                    [&](const auto &c) -> Fortran::parser::SourcePosition {
+                    [&](const auto &c) -> std::optional<Fortran::parser::SourcePosition> {
                         return locationFromSource(c.source, end);
                     },
-                    [&](const Fortran::parser::ErrorRecovery &) -> Fortran::parser::SourcePosition {
+                    [&](const Fortran::parser::ErrorRecovery &) -> std::optional<Fortran::parser::SourcePosition> {
                         DIE("Should not encounter ErrorRecovery in parse tree");
                     }
                 }, construct.u);
@@ -507,8 +509,18 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             if (const Fortran::parser::Block &block = executionPart.v; block.empty()) {
                 llvm::outs() << "WARNING: Execution part empty.\n";
             } else {
-                const Fortran::parser::SourcePosition startLoc{getLocation(block.front(), false)};
-                const Fortran::parser::SourcePosition endLoc{getLocation(block.back(), true)};
+                const std::optional startLocOpt{getLocation(block.front(), false)};
+                const std::optional endLocOpt{getLocation(block.back(), true)};
+
+                if (!startLocOpt.has_value()) {
+                    llvm::errs() << "ERROR: execution part had no start source location!\n";
+                }
+                if (!endLocOpt.has_value()) {
+                    llvm::errs() << "ERROR: execution part had no end source location!\n";
+                }
+
+                const auto startLoc{startLocOpt.value()};
+                const auto endLoc{endLocOpt.value()};
 
                 // Insert the timer start in the Pre phase (when we first visit the node)
                 // and the timer stop in the Post phase (when we return after visiting the node's children).
@@ -562,9 +574,10 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             if (const auto actionStmt = std::get_if<Fortran::parser::Statement<Fortran::parser::ActionStmt> >(
                 &execConstruct.u)) {
                 if (std::holds_alternative<Fortran::common::Indirection<Fortran::parser::ReturnStmt>>(actionStmt->statement.u)) {
-                    const Fortran::parser::SourcePosition returnPos{ locationFromSource(actionStmt->source, false)};
-                    llvm::outs() << "Return statement at " << returnPos.line << "\n";
-                    addInstrumentationPoint(SaltInstrumentationPointType::RETURN_STMT, returnPos.line);
+                    const std::optional returnPos{ locationFromSource(actionStmt->source, false)};
+                    const int returnLine{returnPos.value().line};
+                    llvm::outs() << "Return statement at " << returnLine << "\n";
+                    addInstrumentationPoint(SaltInstrumentationPointType::RETURN_STMT, returnLine);
                 }
             }
             return true;
