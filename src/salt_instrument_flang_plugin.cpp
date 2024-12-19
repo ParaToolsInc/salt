@@ -27,6 +27,7 @@ limitations under the License.
 #include <optional>
 #include <tuple>
 #include <regex>
+#include <algorithm>
 
 
 #define RYML_SINGLE_HDR_DEFINE_NOW
@@ -73,7 +74,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         RETURN_STMT //  Stop timer on the line before
     };
 
-    typedef std::map<SaltInstrumentationPointType, const std::string> InstrumentationMap;
+    using InstrumentationMap = std::map<SaltInstrumentationPointType, const std::string>;
 
     struct SaltInstrumentationPoint {
         SaltInstrumentationPoint(const SaltInstrumentationPointType instrumentation_point_type,
@@ -92,9 +93,36 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         bool operator<(const SaltInstrumentationPoint &other) const {
             if (startLine == other.startLine) {
-                return instrumentBefore();
+                if (instrumentBefore() && !other.instrumentBefore()) {
+                    return true;
+                }
+                return false;
             }
             return startLine < other.startLine;
+        }
+
+        [[nodiscard]] std::string typeString() const {
+            switch (instrumentationPointType) {
+                case SaltInstrumentationPointType::PROGRAM_BEGIN:
+                    return "PROGRAM_BEGIN"s;
+                case SaltInstrumentationPointType::PROCEDURE_BEGIN:
+                    return "PROCEDURE_BEGIN"s;
+                case SaltInstrumentationPointType::PROCEDURE_END:
+                    return "PROCEDURE_END"s;
+                case SaltInstrumentationPointType::RETURN_STMT:
+                    return "RETURN_STMT"s;
+                default:
+                    CRASH_NO_CASE;
+            }
+        }
+
+        [[nodiscard]] std::string toString() const {
+            std::stringstream ss;
+            ss << startLine << "\t";
+            ss << (instrumentBefore() ? "before" : "after") << "\t";
+            ss << typeString() << "\t";
+            ss << "\"" << timerName.value_or("<no name>") << "\"";
+            return ss.str();
         }
 
         SaltInstrumentationPointType instrumentationPointType;
@@ -123,6 +151,14 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         [[nodiscard]] const auto &getInstrumentationPoints() const {
             return instrumentationPoints_;
+        }
+
+        [[nodiscard]] std::string dumpInstrumentationPoints() const {
+            std::stringstream ss;
+            for (const auto & instPt : getInstrumentationPoints()) {
+                ss << instPt.toString() << "\n";
+            }
+            return ss.str();
         }
 
         /**
@@ -558,7 +594,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
                     const std::string timerName{ss.str()};
 
-                    // Split the timername string so that it will fit between Fortran 77's 72 character limit,
+                    // Split the timerName string so that it will fit between Fortran 77's 72-character limit,
                     // and use character string line continuation syntax compatible with Fortran 77 and modern
                     // Fortran.
                     std::stringstream ss2;
@@ -658,6 +694,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         std::string line;
         int lineNum{0};
         const auto &instPts{visitor.getInstrumentationPoints()};
+
+        llvm::outs() << "Will perform instrumentation:\n" << visitor.dumpInstrumentationPoints();
 
         // Sanity check: are instrumentation points in the right order?
         if (!std::is_sorted(instPts.cbegin(), instPts.cend())) {
