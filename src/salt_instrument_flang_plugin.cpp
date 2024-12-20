@@ -204,6 +204,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         // See https://github.com/llvm/llvm-project/blob/main/flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
         // for examples of getting source position for a parse tree node
 
+        // Never descend into InterfaceSpecification nodes, they can't contain executable statements.
+        bool Pre(const Fortran::parser::InterfaceSpecification &) { return false; }
+
         bool Pre(const Fortran::parser::MainProgram &) {
             isInMainProgram_ = true;
             return true;
