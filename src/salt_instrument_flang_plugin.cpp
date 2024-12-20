@@ -574,8 +574,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                     llvm::errs() << "ERROR: execution part had no end source location!\n";
                 }
 
-                const auto startLoc{startLocOpt.value()};
-                const auto endLoc{endLocOpt.value()};
+                const auto& startLoc{startLocOpt.value()};
+                const auto& endLoc{endLocOpt.value()};
 
                 // Insert the timer start in the Pre phase (when we first visit the node)
                 // and the timer stop in the Post phase (when we return after visiting the node's children).
@@ -705,12 +705,12 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         auto instIter{instPts.cbegin()};
         while (std::getline(inputStream, line)) {
             ++lineNum;
-            if (instIter != instPts.cend() && instIter->startLine == lineNum && instIter->instrumentBefore()) {
+            while (instIter != instPts.cend() && instIter->startLine == lineNum && instIter->instrumentBefore()) {
                 outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
                 ++instIter;
             }
             outputStream << line << "\n";
-            if (instIter != instPts.cend() && instIter->startLine == lineNum && !instIter->instrumentBefore()) {
+            while (instIter != instPts.cend() && instIter->startLine == lineNum && !instIter->instrumentBefore()) {
                 outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
                 ++instIter;
             }
