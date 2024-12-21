@@ -68,27 +68,34 @@ using namespace Fortran::frontend;
  */
 class SaltInstrumentAction final : public PluginParseTreeAction {
     enum class SaltInstrumentationPointType {
-        PROGRAM_BEGIN, // Declare profiler, initialize TAU, set node, start timer
-        PROCEDURE_BEGIN, // Declare profiler, start timer
-        PROCEDURE_END, // Stop timer on the line after
-        RETURN_STMT //  Stop timer on the line before
+        PROGRAM_BEGIN,     // Declare profiler, initialize TAU, set node, start timer
+        PROCEDURE_BEGIN,   // Declare profiler, start timer
+        PROCEDURE_END,     // Stop timer on the line after
+        RETURN_STMT,       // Stop timer on the line before
+        IF_RETURN          // Transform if to if-then-endif, stop timer before return
     };
 
     using InstrumentationMap = std::map<SaltInstrumentationPointType, const std::string>;
 
+    // TODO Refactor. The SaltInstrumentationPoint is getting complicated enough that this
+    // should be refactored to subclasses instead of having a bunch of fields that only
+    // sometimes apply.
     struct SaltInstrumentationPoint {
         SaltInstrumentationPoint(const SaltInstrumentationPointType instrumentation_point_type,
                                  const int start_line,
-                                 const std::optional<std::string> &timer_name = std::nullopt)
+                                 const std::optional<std::string> &timer_name = std::nullopt,
+                                 const int conditional_column = 0)
             : instrumentationPointType(instrumentation_point_type),
               startLine(start_line),
-              timerName(timer_name) {
+              timerName(timer_name),
+              conditionalColumn(conditional_column) {
         }
 
         [[nodiscard]] bool instrumentBefore() const {
             return instrumentationPointType == SaltInstrumentationPointType::PROGRAM_BEGIN
                    || instrumentationPointType == SaltInstrumentationPointType::PROCEDURE_BEGIN
-                   || instrumentationPointType == SaltInstrumentationPointType::RETURN_STMT;
+                   || instrumentationPointType == SaltInstrumentationPointType::RETURN_STMT
+                   || instrumentationPointType == SaltInstrumentationPointType::IF_RETURN;
         }
 
         bool operator<(const SaltInstrumentationPoint &other) const {
@@ -111,6 +118,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                     return "PROCEDURE_END"s;
                 case SaltInstrumentationPointType::RETURN_STMT:
                     return "RETURN_STMT"s;
+                case SaltInstrumentationPointType::IF_RETURN:
+                    return "IF_RETURN"s;
                 default:
                     CRASH_NO_CASE;
             }
@@ -122,12 +131,16 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             ss << (instrumentBefore() ? "before" : "after") << "\t";
             ss << typeString() << "\t";
             ss << "\"" << timerName.value_or("<no name>") << "\"";
+            if (instrumentationPointType == SaltInstrumentationPointType::IF_RETURN) {
+                ss << "\t" << conditionalColumn;
+            }
             return ss.str();
         }
 
         SaltInstrumentationPointType instrumentationPointType;
         int startLine;
         std::optional<std::string> timerName;
+        int conditionalColumn;
     };
 
 
@@ -143,10 +156,11 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
          * Instrumentation will be added after start_line.
          */
         void addInstrumentationPoint(SaltInstrumentationPointType instrumentation_point_type,
-                                     int start_line,
-                                     const std::optional<std::string> &timer_name = std::nullopt) {
+                                     const int start_line,
+                                     const std::optional<std::string> &timer_name = std::nullopt,
+                                     const int conditional_column = 0) {
             instrumentationPoints_.emplace_back(
-                instrumentation_point_type, start_line, timer_name);
+                instrumentation_point_type, start_line, timer_name, conditional_column);
         }
 
         [[nodiscard]] const auto &getInstrumentationPoints() const {
@@ -155,7 +169,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         [[nodiscard]] std::string dumpInstrumentationPoints() const {
             std::stringstream ss;
-            for (const auto & instPt : getInstrumentationPoints()) {
+            for (const auto &instPt: getInstrumentationPoints()) {
                 ss << instPt.toString() << "\n";
             }
             return ss.str();
@@ -203,9 +217,6 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
         // See https://github.com/llvm/llvm-project/blob/main/flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
         // for examples of getting source position for a parse tree node
-
-        // Never descend into InterfaceSpecification nodes, they can't contain executable statements.
-        bool Pre(const Fortran::parser::InterfaceSpecification &) { return false; }
 
         bool Pre(const Fortran::parser::MainProgram &) {
             isInMainProgram_ = true;
@@ -325,7 +336,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                             if (const auto &maybeDo = std::get<std::optional<Fortran::parser::DoConstruct> >(c.t);
                                 maybeDo.has_value()) {
                                 return locationFromSource(
-                                    std::get<Fortran::parser::Statement<Fortran::parser::EndDoStmt> >(maybeDo.value().t).
+                                    std::get<Fortran::parser::Statement<Fortran::parser::EndDoStmt> >(maybeDo.value().t)
+                                    .
                                     source, end);
                             }
                         }
@@ -550,6 +562,29 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 }, construct.u);
         }
 
+        bool Pre(const Fortran::parser::IfStmt &ifStmt) {
+            if (const auto &ifAction{
+                    std::get<Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> >(ifStmt.t)
+                };
+                std::holds_alternative<Fortran::common::Indirection<
+                    Fortran::parser::ReturnStmt> >(ifAction.statement.u)) {
+                const auto startPos{
+                    locationFromSource(std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
+                                       false).value()
+                };
+                const auto endPos{
+                    locationFromSource(std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
+                                       true).value()
+                };
+                llvm::outs() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
+                             << "(" << endPos.line << "," << endPos.column << ")\n";
+                // TODO this assumes that the conditional fits on one list
+                // make more robust, test with more cases
+                addInstrumentationPoint(SaltInstrumentationPointType::IF_RETURN, startPos.line, std::nullopt, endPos.column);
+            }
+            return true;
+        }
+
         // Split handling of ExecutionPart into two phases
         // so that we insert Instrumentation Points in order
         // even if we separately insert them in visitors for
@@ -577,8 +612,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                     llvm::errs() << "ERROR: execution part had no end source location!\n";
                 }
 
-                const auto& startLoc{startLocOpt.value()};
-                const auto& endLoc{endLocOpt.value()};
+                const auto &startLoc{startLocOpt.value()};
+                const auto &endLoc{endLocOpt.value()};
 
                 // Insert the timer start in the Pre phase (when we first visit the node)
                 // and the timer stop in the Post phase (when we return after visiting the node's children).
@@ -706,13 +741,33 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
 
         auto instIter{instPts.cbegin()};
+        bool shouldOutputLine{true};
         while (std::getline(inputStream, line)) {
             ++lineNum;
+            shouldOutputLine = true;
             while (instIter != instPts.cend() && instIter->startLine == lineNum && instIter->instrumentBefore()) {
-                outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
+                // Need special case for if-return because it requires a more elaborate transformation
+                // than simply inserting lines
+                // TODO instead of special case have three kinds of instrumentation: before, after, and REPLACE
+                // TODO handle return <value> case
+                // TODO handle multi-line
+                // TODO handle line continuation if too long
+                if (instIter->instrumentationPointType == SaltInstrumentationPointType::IF_RETURN) {
+                   shouldOutputLine = false;
+                   line.erase(instIter->conditionalColumn);
+                   line.insert(instIter->conditionalColumn, " then");
+                   outputStream << line << "\n";
+                   outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
+                   outputStream << "      return\n";
+                   outputStream << "      endif\n";
+                } else {
+                    outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
+                }
                 ++instIter;
             }
-            outputStream << line << "\n";
+            if (shouldOutputLine) {
+                outputStream << line << "\n";
+            }
             while (instIter != instPts.cend() && instIter->startLine == lineNum && !instIter->instrumentBefore()) {
                 outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
                 ++instIter;
@@ -794,6 +849,9 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         // The return statement uses the same text as procedure end,
         // but is inserted before the line instead of after.
         map.emplace(SaltInstrumentationPointType::RETURN_STMT, ss.str());
+        // The if-return statement uses the same text as procedure end,
+        // but requires transformation to if-then-endif
+        map.emplace(SaltInstrumentationPointType::IF_RETURN, ss.str());
 
         return map;
     }

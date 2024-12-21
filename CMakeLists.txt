@@ -612,6 +612,7 @@ set(FORTRAN_TESTS_SOURCES_LIST
   loop_test.f90
   trivial.f90
   return-only.f90
+  if-stmt.f90
 )
 
 # Add a smoke test of the fparse-llvm script
