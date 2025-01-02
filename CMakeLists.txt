@@ -66,7 +66,6 @@ string(APPEND SALT_GREETING "\n")
 string(PREPEND SALT_GREETING "\n")
 message(STATUS "${SALT_GREETING}")
 
-
 #---------------------------------------------------------------------------------
 # Get & print diagnostics about flags passed to CMake and build/source directories
 #---------------------------------------------------------------------------------
@@ -88,6 +87,8 @@ project(SALT-FM
   DESCRIPTION "An LLVM-based Source Analysis Tookit for HPC"
   HOMEPAGE_URL "https://github.com/ParaToolsInc/salt"
   LANGUAGES CXX C)
+
+include(GNUInstallDirs)
 
 #----------
 # Find LLVM
@@ -237,8 +238,19 @@ target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-unde
 # Turn on debug output if a debug build is being built
 target_compile_definitions(cparse-llvm PUBLIC $<$<CONFIG:Debug>:DEBUG_NO_WAY>)
 # Install the target
-install(TARGETS cparse-llvm DESTINATION bin)
+install(TARGETS cparse-llvm DESTINATION ${CMAKE_INSTALL_BINDIR})
+set_target_properties(cparse-llvm PROPERTIES 
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}")
 
+#------------------------------------------------------
+# Handle config files in build directory & installation
+#------------------------------------------------------
+# Copy ${CMAKE_SOURCE_DIR}/config_files to ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/saltfm/config_files
+# and install them to ${CMAKE_INSTALL_DATADIR}/saltfm/config_files
+file(COPY ${CMAKE_SOURCE_DIR}/config_files
+  DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/saltfm)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/saltfm
+  DESTINATION ${CMAKE_INSTALL_DATADIR})
 
 #---------------------
 # Flang Frontend library
@@ -294,12 +306,15 @@ if(MLIR_FOUND AND Flang_FOUND)
     target_compile_features(salt-flang-plugin PUBLIC cxx_std_17)
     target_link_libraries(salt-flang-plugin PUBLIC SALT_FLANG_FRONTEND)
     target_link_options(salt-flang-plugin PUBLIC -Wl,--as-needed -Wl,-undefined -Wl,dynamic_lookup)
+    set_target_properties(salt-flang-plugin PROPERTIES
+      ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}")
 
-    install(TARGETS salt-flang-plugin DESTINATION lib)
+    install(TARGETS salt-flang-plugin DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-    configure_file(${CMAKE_SOURCE_DIR}/src/fparse-llvm.in ${CMAKE_BINARY_DIR}/fparse-llvm @ONLY)
-    install(PROGRAMS ${CMAKE_BINARY_DIR}/fparse-llvm
-      TYPE BIN)
+    configure_file(${CMAKE_SOURCE_DIR}/src/fparse-llvm.in ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm @ONLY)
+    install(PROGRAMS ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm
+      TYPE BIN) # TYPE BIN installs into CMAKE_INSTALL_BINDIR
 
 else()
     message(STATUS "Flang not found -- skipping Flang frontend plugin")
@@ -617,7 +632,7 @@ set(FORTRAN_TESTS_SOURCES_LIST
 
 # Add a smoke test of the fparse-llvm script
 add_test(NAME fparse_llvm_smoke_test
-  COMMAND ${CMAKE_BINARY_DIR}/fparse-llvm -h)
+  COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm -h)
 set_tests_properties(fparse_llvm_smoke_test
   PROPERTIES
   LABELS smoke
@@ -626,11 +641,11 @@ set_tests_properties(fparse_llvm_smoke_test
 
 foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
   add_test(NAME instrument_${test_source}
-    COMMAND ./fparse-llvm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
+    COMMAND ./${CMAKE_INSTALL_BINDIR}/fparse-llvm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
     )
   set_tests_properties(instrument_${test_source}
     PROPERTIES
-    REQUIRED_FILES "${CMAKE_BINARY_DIR}/fparse-llvm"
+    REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm"
     ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml"
     PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
   )
