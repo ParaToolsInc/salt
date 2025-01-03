@@ -44,11 +44,15 @@ limitations under the License.
 #include "flang/Parser/source.h"
 #include "flang/Common/indirection.h"
 
+#include "selectfile.hpp"
+
 // TODO Split declarations into a separate header file.
 // TODO Put debug output behind verbose flag
 
 #define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
 #define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/tau_config.yaml"
+
+#define SALT_FORTRAN_SELECT_FILE_VAR "SALT_FORTRAN_SELECT_FILE"
 
 #define SALT_FORTRAN_KEY "Fortran"
 #define SALT_FORTRAN_PROGRAM_BEGIN_KEY "program_insert"
@@ -68,11 +72,11 @@ using namespace Fortran::frontend;
  */
 class SaltInstrumentAction final : public PluginParseTreeAction {
     enum class SaltInstrumentationPointType {
-        PROGRAM_BEGIN,     // Declare profiler, initialize TAU, set node, start timer
-        PROCEDURE_BEGIN,   // Declare profiler, start timer
-        PROCEDURE_END,     // Stop timer on the line after
-        RETURN_STMT,       // Stop timer on the line before
-        IF_RETURN          // Transform if to if-then-endif, stop timer before return
+        PROGRAM_BEGIN, // Declare profiler, initialize TAU, set node, start timer
+        PROCEDURE_BEGIN, // Declare profiler, start timer
+        PROCEDURE_END, // Stop timer on the line after
+        RETURN_STMT, // Stop timer on the line before
+        IF_RETURN // Transform if to if-then-endif, stop timer before return
     };
 
     using InstrumentationMap = std::map<SaltInstrumentationPointType, const std::string>;
@@ -219,7 +223,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         // for examples of getting source position for a parse tree node
 
         // Never descend into InterfaceSpecification nodes, they can't contain executable statements.
-        bool Pre(const Fortran::parser::InterfaceSpecification &) { return false; }
+        static bool Pre(const Fortran::parser::InterfaceSpecification &) { return false; }
 
         bool Pre(const Fortran::parser::MainProgram &) {
             isInMainProgram_ = true;
@@ -572,18 +576,21 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 std::holds_alternative<Fortran::common::Indirection<
                     Fortran::parser::ReturnStmt> >(ifAction.statement.u)) {
                 const auto startPos{
-                    locationFromSource(std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
-                                       false).value()
+                    locationFromSource(
+                        std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
+                        false).value()
                 };
                 const auto endPos{
-                    locationFromSource(std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
-                                       true).value()
+                    locationFromSource(
+                        std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
+                        true).value()
                 };
                 llvm::outs() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
-                             << "(" << endPos.line << "," << endPos.column << ")\n";
+                        << "(" << endPos.line << "," << endPos.column << ")\n";
                 // TODO this assumes that the conditional fits on one list
                 // make more robust, test with more cases
-                addInstrumentationPoint(SaltInstrumentationPointType::IF_RETURN, startPos.line, std::nullopt, endPos.column);
+                addInstrumentationPoint(SaltInstrumentationPointType::IF_RETURN, startPos.line, std::nullopt,
+                                        endPos.column);
             }
             return true;
         }
@@ -744,7 +751,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         }
 
         auto instIter{instPts.cbegin()};
-        bool shouldOutputLine{true};
+        bool shouldOutputLine{};
         while (std::getline(inputStream, line)) {
             ++lineNum;
             shouldOutputLine = true;
@@ -756,13 +763,13 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 // TODO handle multi-line
                 // TODO handle line continuation if too long
                 if (instIter->instrumentationPointType == SaltInstrumentationPointType::IF_RETURN) {
-                   shouldOutputLine = false;
-                   line.erase(instIter->conditionalColumn);
-                   line.insert(instIter->conditionalColumn, " then");
-                   outputStream << line << "\n";
-                   outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
-                   outputStream << "      return\n";
-                   outputStream << "      endif\n";
+                    shouldOutputLine = false;
+                    line.erase(instIter->conditionalColumn);
+                    line.insert(instIter->conditionalColumn, " then");
+                    outputStream << line << "\n";
+                    outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
+                    outputStream << "      return\n";
+                    outputStream << "      endif\n";
                 } else {
                     outputStream << getInstrumentationPointString(*instIter, instMap) << "\n";
                 }
@@ -787,6 +794,15 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             }
         }
         return SALT_FORTRAN_CONFIG_DEFAULT_PATH;
+    }
+
+    [[nodiscard]] static std::optional<std::string> getSelectFilePath() {
+        if (const char *val = getenv(SALT_FORTRAN_SELECT_FILE_VAR)) {
+            if (std::string selectFile{val}; !selectFile.empty()) {
+                return selectFile;
+            }
+        }
+        return std::nullopt;
     }
 
     [[nodiscard]] static ryml::Tree getConfigYamlTree(const std::string &configPath) {
@@ -881,6 +897,23 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         const std::string configPath{getConfigPath()};
         const ryml::Tree yamlTree = getConfigYamlTree(configPath);
         const InstrumentationMap instMap = getInstrumentationMap(yamlTree);
+
+        if (const auto selectPath{getSelectFilePath()}; selectPath.has_value()) {
+            if (processInstrumentationRequests(selectPath->c_str())) {
+                const auto printStr = [&](const auto &a) { llvm::outs() << a << "\n"; };
+                llvm::outs() << "File include list:\n";
+                std::for_each(fileincludelist.cbegin(), fileincludelist.cend(), printStr);
+                llvm::outs() << "File exclude list:\n";
+                std::for_each(fileexcludelist.cbegin(), fileexcludelist.cend(), printStr);
+                llvm::outs() << "Include list:\n";
+                std::for_each(includelist.cbegin(), includelist.cend(), printStr);
+                llvm::outs() << "Exclude list:\n";
+                std::for_each(excludelist.cbegin(), excludelist.cend(), printStr);
+            } else {
+                llvm::errs() << "ERROR: Unable to read selective instrumentation file at " << selectPath << "\n";
+                std::exit(-4);
+            }
+        }
 
         // Get the extension of the input file
         // For input file 'filename.ext' we will output to 'filename.inst.Ext'

@@ -284,6 +284,7 @@ if(MLIR_FOUND AND Flang_FOUND)
     list(TRANSFORM SALT_FLANG_PLUGIN_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
 
     set(SALT_FLANG_PLUGIN_SRCS
+    selectfile.cpp
     salt_instrument_flang_plugin.cpp
     )
     list(TRANSFORM SALT_FLANG_PLUGIN_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
