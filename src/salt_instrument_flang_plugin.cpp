@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2024, ParaTools, Inc.
+Copyright (C) 2024-2025, ParaTools, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -151,7 +151,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
     struct SaltInstrumentParseTreeVisitor {
         explicit SaltInstrumentParseTreeVisitor(Fortran::parser::Parsing *parsing, const bool skipInstrument = false)
-            : mainProgramLine_(0), subProgramLine_(0), skipInstrument_(skipInstrument), parsing(parsing) {
+            : mainProgramLine_(0), subProgramLine_(0), skipInstrumentFile_(skipInstrument), parsing(parsing) {
         }
 
         /**
@@ -164,7 +164,7 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                                      const int start_line,
                                      const std::optional<std::string> &timer_name = std::nullopt,
                                      const int conditional_column = 0) {
-            if (!skipInstrument_) {
+            if (!skipInstrumentFile_ && !skipInstrumentSubprogram_) {
                 instrumentationPoints_.emplace_back(
                     instrumentation_point_type, start_line, timer_name, conditional_column);
             }
@@ -198,6 +198,55 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                 return sourceRange->first;
             }
             return std::nullopt;
+        }
+
+        [[nodiscard]] static std::string convertWildcardToRegexForm(const std::string &wildString) {
+            // Escape all regex special characters
+            static const std::regex metacharacters(R"([\.\^\$\+\(\)\[\]\{\}\|\?\*])");
+            const std::string escapedString{std::regex_replace(wildString, metacharacters, R"(\$&)")};
+            // Convert lines in TAU select file format (where "#" means zero or more characters)
+            // to regex version (where ".*" means zero or more characters).
+            // "#" is used for wildcard in routine names in TAU selective instrumentation files
+            // because "*" can be used in C/C++ function identifiers as part of pointer types.
+            static const std::regex hashRegex{R"(#)"};
+            return std::regex_replace(escapedString, hashRegex, ".*");
+        }
+
+        [[nodiscard]] static bool shouldInstrumentSubprogram(const std::string &subprogramName) {
+            // Check if this subprogram should be instrumented.
+            // It should if:
+            //   - No include or exclude list is specified
+            //   - An exclude list is present and the subprogram is not in it
+            //   - An include list is present and the subprogram is in it (and not on the exclude list)
+
+            if (includelist.empty() && excludelist.empty()) {
+                return true;
+            }
+
+            for (const auto &excludeEntry: excludelist) {
+                if (const std::regex excludeRegex{convertWildcardToRegexForm(excludeEntry)}; std::regex_search(
+                    subprogramName, excludeRegex)) {
+                    return false;
+                }
+            }
+
+            bool subprogramInIncludeList{false};
+            for (const auto &includeEntry: includelist) {
+                if (const std::regex includeRegex{convertWildcardToRegexForm(includeEntry)}; std::regex_search(
+                    subprogramName, includeRegex)) {
+                    subprogramInIncludeList = true;
+                    break;
+                }
+            }
+
+            if (!includelist.empty()) {
+                if (subprogramInIncludeList) {
+                    return true;
+                }
+                return false;
+            }
+
+            return true;
         }
 
         // Default empty visit functions for otherwise unhandled types.
@@ -249,11 +298,17 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             subprogramName_ = name.ToString();
             subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
             llvm::outs() << "Enter Subroutine: " << subprogramName_ << "\n";
+            if (!shouldInstrumentSubprogram(subprogramName_)) {
+                llvm::outs() << "Skipping instrumentation of " << subprogramName_ <<
+                        " due to selective instrumentation\n";
+                skipInstrumentSubprogram_ = true;
+            }
             return true;
         }
 
         void Post(const Fortran::parser::SubroutineSubprogram &) {
             llvm::outs() << "Exit Subroutine: " << subprogramName_ << "\n";
+            skipInstrumentSubprogram_ = false;
             subprogramName_.clear();
         }
 
@@ -262,11 +317,17 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             subprogramName_ = name.ToString();
             subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
             llvm::outs() << "Enter Function: " << subprogramName_ << "\n";
+            if (!shouldInstrumentSubprogram(subprogramName_)) {
+                llvm::outs() << "Skipping instrumentation of " << subprogramName_ <<
+                        " due to selective instrumentation\n";
+                skipInstrumentSubprogram_ = true;
+            }
             return true;
         }
 
         void Post(const Fortran::parser::FunctionSubprogram &) {
             llvm::outs() << "Exit Function: " << subprogramName_ << "\n";
+            skipInstrumentSubprogram_ = false;
             subprogramName_.clear();
             subProgramLine_ = 0;
         }
@@ -698,7 +759,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         std::string subprogramName_;
         int subProgramLine_;
 
-        bool skipInstrument_;
+        bool skipInstrumentFile_;
+        bool skipInstrumentSubprogram_{false};
 
         std::vector<SaltInstrumentationPoint> instrumentationPoints_;
 
@@ -880,11 +942,15 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         return map;
     }
 
-    [[nodiscard]] static std::string convertToRegexForm(const std::string &globString) {
+    [[nodiscard]] static std::string convertGlobToRegexForm(const std::string &globString) {
         // Convert lines in shell glob format (where "*" means zero or more characters)
         // to regex version (where ".*" means zero or more characters).
+        // This is used for files in TAU selective instrumentation files.
         static std::regex starRegex{R"(\*)"};
-        return std::regex_replace(globString, starRegex, ".*");
+        const std::string starString{std::regex_replace(globString, starRegex, ".*")};
+        // Escape all special regex characters except for "*" which was previously handled.
+        static const std::regex metacharacters(R"([\.\^\$\+\(\)\[\]\{\}\|\?])");
+        return std::regex_replace(starString, metacharacters, R"(\$&)");
     }
 
     [[nodiscard]] static bool shouldInstrumentFile(const std::filesystem::path &filePath) {
@@ -898,28 +964,20 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             return true;
         }
 
-        bool fileInExcludeList{false};
         const auto filePart{filePath.filename()};
-        if (!fileexcludelist.empty()) {
-            for (const auto &excludeEntry: fileexcludelist) {
-                if (const std::regex excludeRegex{convertToRegexForm(excludeEntry)}; std::regex_search(
-                    filePart.string(), excludeRegex)) {
-                    fileInExcludeList = true;
-                    break;
-                }
+        for (const auto &excludeEntry: fileexcludelist) {
+            if (const std::regex excludeRegex{convertGlobToRegexForm(excludeEntry)}; std::regex_search(
+                filePart.string(), excludeRegex)) {
+                return false;
             }
         }
-        if (fileInExcludeList) {
-            return false;
-        }
+
         bool fileInIncludeList{false};
-        if (!fileincludelist.empty()) {
-            for (const auto &includeEntry: fileincludelist) {
-                if (const std::regex includeRegex{convertToRegexForm(includeEntry)}; std::regex_search(
-                    filePart.string(), includeRegex)) {
-                    fileInIncludeList = true;
-                    break;
-                }
+        for (const auto &includeEntry: fileincludelist) {
+            if (const std::regex includeRegex{convertGlobToRegexForm(includeEntry)}; std::regex_search(
+                filePart.string(), includeRegex)) {
+                fileInIncludeList = true;
+                break;
             }
         }
 
