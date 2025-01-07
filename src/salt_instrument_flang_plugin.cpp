@@ -28,6 +28,7 @@ limitations under the License.
 #include <tuple>
 #include <regex>
 #include <algorithm>
+#include <filesystem>
 
 
 #define RYML_SINGLE_HDR_DEFINE_NOW
@@ -149,8 +150,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
 
 
     struct SaltInstrumentParseTreeVisitor {
-        explicit SaltInstrumentParseTreeVisitor(Fortran::parser::Parsing *parsing)
-            : mainProgramLine_(0), subProgramLine_(0), parsing(parsing) {
+        explicit SaltInstrumentParseTreeVisitor(Fortran::parser::Parsing *parsing, const bool skipInstrument = false)
+            : mainProgramLine_(0), subProgramLine_(0), skipInstrument_(skipInstrument), parsing(parsing) {
         }
 
         /**
@@ -163,8 +164,10 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
                                      const int start_line,
                                      const std::optional<std::string> &timer_name = std::nullopt,
                                      const int conditional_column = 0) {
-            instrumentationPoints_.emplace_back(
-                instrumentation_point_type, start_line, timer_name, conditional_column);
+            if (!skipInstrument_) {
+                instrumentationPoints_.emplace_back(
+                    instrumentation_point_type, start_line, timer_name, conditional_column);
+            }
         }
 
         [[nodiscard]] const auto &getInstrumentationPoints() const {
@@ -695,6 +698,8 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         std::string subprogramName_;
         int subProgramLine_;
 
+        bool skipInstrument_;
+
         std::vector<SaltInstrumentationPoint> instrumentationPoints_;
 
         // Pass in the parser object from the Action to the Visitor
@@ -875,6 +880,59 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         return map;
     }
 
+    [[nodiscard]] static std::string convertToRegexForm(const std::string &globString) {
+        // Convert lines in shell glob format (where "*" means zero or more characters)
+        // to regex version (where ".*" means zero or more characters).
+        static std::regex starRegex{R"(\*)"};
+        return std::regex_replace(globString, starRegex, ".*");
+    }
+
+    [[nodiscard]] static bool shouldInstrumentFile(const std::filesystem::path &filePath) {
+        // Check if this file should be instrumented.
+        // It should if:
+        //   - No file include or file exclude list is specified
+        //   - An exclude list is present and the file is not in it
+        //   - An include list is present and the file is in it
+
+        if (fileincludelist.empty() && fileexcludelist.empty()) {
+            return true;
+        }
+
+        bool fileInExcludeList{false};
+        const auto filePart{filePath.filename()};
+        if (!fileexcludelist.empty()) {
+            for (const auto &excludeEntry: fileexcludelist) {
+                if (const std::regex excludeRegex{convertToRegexForm(excludeEntry)}; std::regex_search(
+                    filePart.string(), excludeRegex)) {
+                    fileInExcludeList = true;
+                    break;
+                }
+            }
+        }
+        if (fileInExcludeList) {
+            return false;
+        }
+        bool fileInIncludeList{false};
+        if (!fileincludelist.empty()) {
+            for (const auto &includeEntry: fileincludelist) {
+                if (const std::regex includeRegex{convertToRegexForm(includeEntry)}; std::regex_search(
+                    filePart.string(), includeRegex)) {
+                    fileInIncludeList = true;
+                    break;
+                }
+            }
+        }
+
+        if (!fileincludelist.empty()) {
+            if (fileInIncludeList) {
+                return true;
+            }
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * This is the entry point for the plugin.
      */
@@ -886,12 +944,14 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
         Fortran::parser::Parsing &parsing = getParsing();
 
         // Get the path to the input file
-        const auto inputFilePath = getInputFilePath(parsing);
-        if (!inputFilePath) {
+        const auto inputFilePathStr = getInputFilePath(parsing);
+        if (!inputFilePathStr) {
             llvm::errs() << "ERROR: Unable to find input file name!\n";
             std::exit(-1);
         }
-        llvm::outs() << "Have input file: " << *inputFilePath << "\n";
+        llvm::outs() << "Have input file: " << *inputFilePathStr << "\n";
+
+        const std::filesystem::path inputFilePath{inputFilePathStr.value()};
 
         // Read and parse the yaml configuration file
         const std::string configPath{getConfigPath()};
@@ -915,31 +975,41 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             }
         }
 
+
         // Get the extension of the input file
         // For input file 'filename.ext' we will output to 'filename.inst.Ext'
         // Since we are adding preprocessor directives in the emitted code,
         // the file extension should be capitalized.
         std::string inputFileExtension;
-        if (auto const extPos = inputFilePath->find_last_of('.'); extPos == std::string::npos) {
+        if (auto const extPos = inputFilePath.string().find_last_of('.'); extPos == std::string::npos) {
             inputFileExtension = "F90"; // Default if for some reason file has no extension
         } else {
-            inputFileExtension = inputFilePath->substr(extPos + 1); // Part of string past last '.'
+            inputFileExtension = inputFilePath.string().substr(extPos + 1); // Part of string past last '.'
             // Capitalize the first character of inputFileExtension
             if (!inputFileExtension.empty()) {
                 inputFileExtension[0] = static_cast<char>(std::toupper(inputFileExtension[0]));
             }
         }
 
+
         // Open an output file for writing the instrumented code
         const std::string outputFileExtension = "inst."s + inputFileExtension;
         const auto outputFileStream = createOutputFile(outputFileExtension);
 
+        // If visitor has skipInstrument set, no instrumentation points are added
+        // so the file is output into the .inst file unchanged.
+        bool skipInstrument{false};
+        if (!shouldInstrumentFile(inputFilePath)) {
+            llvm::outs() << "Skipping instrumentation of " << inputFilePath
+                    << " due to selective instrumentation.\n";
+            skipInstrument = true;
+        }
         // Walk the parse tree -- marks nodes for instrumentation
-        SaltInstrumentParseTreeVisitor visitor{&parsing};
+        SaltInstrumentParseTreeVisitor visitor{&parsing, skipInstrument};
         Walk(parsing.parseTree(), visitor);
 
         // Use the instrumentation points stored in the Visitor to write the instrumented file.
-        instrumentFile(*inputFilePath, *outputFileStream, visitor, instMap);
+        instrumentFile(inputFilePath, *outputFileStream, visitor, instMap);
 
         outputFileStream->flush();
 
