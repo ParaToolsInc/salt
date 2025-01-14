@@ -408,6 +408,32 @@ class SaltInstrumentAction final : public PluginParseTreeAction {
             return true;
         }
 
+        bool Pre(const Fortran::parser::IfStmt &ifStmt) {
+            if (const auto &ifAction{
+                    std::get<Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> >(ifStmt.t)
+                };
+                std::holds_alternative<Fortran::common::Indirection<
+                    Fortran::parser::ReturnStmt> >(ifAction.statement.u)) {
+                const auto startPos{
+                    locationFromSource(parsing,
+                        std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
+                        false).value()
+                };
+                const auto endPos{
+                    locationFromSource(parsing,
+                        std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source,
+                        true).value()
+                };
+                llvm::outs() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
+                        << "(" << endPos.line << "," << endPos.column << ")\n";
+                // TODO this assumes that the conditional fits on one list
+                // make more robust, test with more cases
+                addInstrumentationPoint(SaltInstrumentationPointType::IF_RETURN, startPos.line, std::nullopt,
+                                        endPos.column);
+            }
+            return true;
+        }
+
     private:
         // Keeps track of current state of traversal
         bool isInMainProgram_{false};
