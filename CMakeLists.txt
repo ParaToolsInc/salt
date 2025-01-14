@@ -292,11 +292,13 @@ if(MLIR_FOUND AND Flang_FOUND)
     set(SALT_FLANG_PLUGIN_HEADER_FILES
     selectfile.hpp
     tau_datatypes.h
+    flang_source_location.hpp
     )
     list(TRANSFORM SALT_FLANG_PLUGIN_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
 
     set(SALT_FLANG_PLUGIN_SRCS
     selectfile.cpp
+    flang_source_location.cpp
     salt_instrument_flang_plugin.cpp
     )
     list(TRANSFORM SALT_FLANG_PLUGIN_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
