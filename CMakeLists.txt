@@ -290,6 +290,7 @@ if(MLIR_FOUND AND Flang_FOUND)
     endif ()
 
     set(SALT_FLANG_PLUGIN_HEADER_FILES
+    dprint.hpp
     selectfile.hpp
     flang_source_location.hpp
     flang_instrumentation_constants.hpp
@@ -298,6 +299,7 @@ if(MLIR_FOUND AND Flang_FOUND)
     list(TRANSFORM SALT_FLANG_PLUGIN_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
 
     set(SALT_FLANG_PLUGIN_SRCS
+    dprint.cpp
     selectfile.cpp
     flang_source_location.cpp
     flang_instrumentation_point.cpp
@@ -652,7 +654,7 @@ foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
   set_tests_properties(instrument_${test_source}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm"
-    ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml"
+    ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml;SALT_FORTRAN_VERBOSE=1"
     PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
   )
 endforeach()

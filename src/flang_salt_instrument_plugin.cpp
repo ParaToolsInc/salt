@@ -34,6 +34,7 @@ limitations under the License.
 #define RYML_SINGLE_HDR_DEFINE_NOW
 #define RYML_SHARED
 
+#include <dprint.hpp>
 #include <ryml_all.hpp>
 
 #include <clang/Basic/SourceLocation.h>
@@ -60,7 +61,6 @@ using namespace Fortran::frontend;
  * Visits each node in the parse tree.
  */
 namespace salt::fortran {
-
     class SaltInstrumentAction final : public PluginParseTreeAction {
         struct SaltInstrumentParseTreeVisitor {
             explicit SaltInstrumentParseTreeVisitor(Fortran::parser::Parsing *parsing,
@@ -200,23 +200,23 @@ namespace salt::fortran {
             }
 
             void Post(const Fortran::parser::MainProgram &) {
-                llvm::outs() << "Exit main program: " << mainProgramName_ << "\n";
+                verboseStream() << "Exit main program: " << mainProgramName_ << "\n";
                 isInMainProgram_ = false;
             }
 
             void Post(const Fortran::parser::ProgramStmt &program) {
                 mainProgramName_ = program.v.ToString();
                 mainProgramLine_ = parsing->allCooked().GetSourcePositionRange(program.v.source)->first.line;
-                llvm::outs() << "Enter main program: " << mainProgramName_ << "\n";
+                verboseStream() << "Enter main program: " << mainProgramName_ << "\n";
             }
 
             bool Pre(const Fortran::parser::SubroutineStmt &subroutineStmt) {
                 const auto &name = std::get<Fortran::parser::Name>(subroutineStmt.t);
                 subprogramName_ = name.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
-                llvm::outs() << "Enter Subroutine: " << subprogramName_ << "\n";
+                verboseStream() << "Enter Subroutine: " << subprogramName_ << "\n";
                 if (!shouldInstrumentSubprogram(subprogramName_)) {
-                    llvm::outs() << "Skipping instrumentation of " << subprogramName_ <<
+                    verboseStream() << "Skipping instrumentation of " << subprogramName_ <<
                             " due to selective instrumentation\n";
                     skipInstrumentSubprogram_ = true;
                 }
@@ -224,7 +224,7 @@ namespace salt::fortran {
             }
 
             void Post(const Fortran::parser::SubroutineSubprogram &) {
-                llvm::outs() << "Exit Subroutine: " << subprogramName_ << "\n";
+                verboseStream() << "Exit Subroutine: " << subprogramName_ << "\n";
                 skipInstrumentSubprogram_ = false;
                 subprogramName_.clear();
             }
@@ -233,9 +233,9 @@ namespace salt::fortran {
                 const auto &name = std::get<Fortran::parser::Name>(functionStmt.t);
                 subprogramName_ = name.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
-                llvm::outs() << "Enter Function: " << subprogramName_ << "\n";
+                verboseStream() << "Enter Function: " << subprogramName_ << "\n";
                 if (!shouldInstrumentSubprogram(subprogramName_)) {
-                    llvm::outs() << "Skipping instrumentation of " << subprogramName_ <<
+                    verboseStream() << "Skipping instrumentation of " << subprogramName_ <<
                             " due to selective instrumentation\n";
                     skipInstrumentSubprogram_ = true;
                 }
@@ -243,7 +243,7 @@ namespace salt::fortran {
             }
 
             void Post(const Fortran::parser::FunctionSubprogram &) {
-                llvm::outs() << "Exit Function: " << subprogramName_ << "\n";
+                verboseStream() << "Exit Function: " << subprogramName_ << "\n";
                 skipInstrumentSubprogram_ = false;
                 subprogramName_.clear();
                 subProgramLine_ = 0;
@@ -264,7 +264,7 @@ namespace salt::fortran {
 
             void handleExecutionPart(const Fortran::parser::ExecutionPart &executionPart, bool pre) {
                 if (const Fortran::parser::Block &block = executionPart.v; block.empty()) {
-                    llvm::outs() << "WARNING: Execution part empty.\n";
+                    verboseStream() << "WARNING: Execution part empty.\n";
                 } else {
                     const std::optional startLocOpt{getLocation(parsing, block.front(), false)};
                     const std::optional endLocOpt{getLocation(parsing, block.back(), true)};
@@ -308,18 +308,18 @@ namespace salt::fortran {
                         const std::string splitTimerName{ss2.str()};
 
                         if (isInMainProgram_) {
-                            llvm::outs() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", "
+                            verboseStream() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", "
                                     <<
                                     startLoc.column << "\n";
                             addProgramBeginInstrumentation(startLoc.line, splitTimerName);
                         } else {
-                            llvm::outs() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line <<
+                            verboseStream() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line <<
                                     ", " <<
                                     startLoc.column << "\n";
                             addProcedureBeginInstrumentation(startLoc.line, splitTimerName);
                         }
                     } else {
-                        llvm::outs() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
+                        verboseStream() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
                         addProcedureEndInstrumentation(endLoc.line);
                     }
                 }
@@ -334,7 +334,7 @@ namespace salt::fortran {
                         actionStmt->statement.u)) {
                         const std::optional returnPos{locationFromSource(parsing, actionStmt->source, false)};
                         const int returnLine{returnPos.value().line};
-                        llvm::outs() << "Return statement at " << returnLine << "\n";
+                        verboseStream() << "Return statement at " << returnLine << "\n";
                         addReturnStmtInstrumentation(returnLine);
                     }
                 }
@@ -359,7 +359,7 @@ namespace salt::fortran {
                                            source,
                                            true).value()
                     };
-                    llvm::outs() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
+                    verboseStream() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
                             << "(" << endPos.line << "," << endPos.column << ")\n";
                     // TODO handle return <value> case
                     // TODO handle multi-line
@@ -416,7 +416,7 @@ namespace salt::fortran {
             int lineNum{0};
             const auto &instPts{visitor.getInstrumentationPoints()};
 
-            llvm::outs() << "Will perform instrumentation:\n" << visitor.dumpInstrumentationPoints();
+            verboseStream() << "Will perform instrumentation:\n" << visitor.dumpInstrumentationPoints();
 
             // Sanity check: are instrumentation points in the right order?
             if (!std::is_sorted(instPts.cbegin(), instPts.cend(), [&](const auto &p1, const auto &p2) {
@@ -598,11 +598,29 @@ namespace salt::fortran {
             return true;
         }
 
+        static void dumpSelectiveRequests() {
+            const auto printStr = [&](const auto &a) { verboseStream() << a << "\n"; };
+            verboseStream() << "File include list:\n";
+            std::for_each(fileincludelist.cbegin(), fileincludelist.cend(), printStr);
+            verboseStream() << "File exclude list:\n";
+            std::for_each(fileexcludelist.cbegin(), fileexcludelist.cend(), printStr);
+            verboseStream() << "Include list:\n";
+            std::for_each(includelist.cbegin(), includelist.cend(), printStr);
+            verboseStream() << "Exclude list:\n";
+            std::for_each(excludelist.cbegin(), excludelist.cend(), printStr);
+        }
+
         /**
          * This is the entry point for the plugin.
          */
         void executeAction() override {
-            llvm::outs() << "==== SALT Instrumentor Plugin starting ====\n";
+            if (const char *val = getenv(SALT_FORTRAN_VERBOSE_VAR)) {
+                if (const std::string verboseFlag{val}; !verboseFlag.empty() && verboseFlag != "0"s) {
+                    enableVerbose();
+                }
+            }
+
+            verboseStream() << "==== SALT Instrumentor Plugin starting ====\n";
 
             // This is the object through which we access the parse tree
             // and the source
@@ -614,7 +632,8 @@ namespace salt::fortran {
                 llvm::errs() << "ERROR: Unable to find input file name!\n";
                 std::exit(-1);
             }
-            llvm::outs() << "Have input file: " << *inputFilePathStr << "\n";
+
+            verboseStream() << "Have input file: " << *inputFilePathStr << "\n";
 
             const std::filesystem::path inputFilePath{inputFilePathStr.value()};
 
@@ -625,15 +644,7 @@ namespace salt::fortran {
 
             if (const auto selectPath{getSelectFilePath()}; selectPath.has_value()) {
                 if (processInstrumentationRequests(selectPath->c_str())) {
-                    const auto printStr = [&](const auto &a) { llvm::outs() << a << "\n"; };
-                    llvm::outs() << "File include list:\n";
-                    std::for_each(fileincludelist.cbegin(), fileincludelist.cend(), printStr);
-                    llvm::outs() << "File exclude list:\n";
-                    std::for_each(fileexcludelist.cbegin(), fileexcludelist.cend(), printStr);
-                    llvm::outs() << "Include list:\n";
-                    std::for_each(includelist.cbegin(), includelist.cend(), printStr);
-                    llvm::outs() << "Exclude list:\n";
-                    std::for_each(excludelist.cbegin(), excludelist.cend(), printStr);
+                    dumpSelectiveRequests();
                 } else {
                     llvm::errs() << "ERROR: Unable to read selective instrumentation file at " << selectPath << "\n";
                     std::exit(-4);
@@ -663,7 +674,7 @@ namespace salt::fortran {
             // so the file is output into the .inst file unchanged.
             bool skipInstrument{false};
             if (!shouldInstrumentFile(inputFilePath)) {
-                llvm::outs() << "Skipping instrumentation of " << inputFilePath
+                verboseStream() << "Skipping instrumentation of " << inputFilePath
                         << " due to selective instrumentation.\n";
                 skipInstrument = true;
             }
@@ -676,10 +687,9 @@ namespace salt::fortran {
 
             outputFileStream->flush();
 
-            llvm::outs() << "==== SALT Instrumentor Plugin finished ====\n";
+            verboseStream() << "==== SALT Instrumentor Plugin finished ====\n";
         }
     };
-
 }
 
 [[maybe_unused]] static FrontendPluginRegistry::Add<salt::fortran::SaltInstrumentAction> X(

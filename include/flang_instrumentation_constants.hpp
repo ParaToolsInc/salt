@@ -16,6 +16,9 @@ limitations under the License.
 #ifndef FLANG_INSTRUMENTATION_CONSTANTS_HPP
 #define FLANG_INSTRUMENTATION_CONSTANTS_HPP
 
+// Verbose flag environment variable
+#define SALT_FORTRAN_VERBOSE_VAR "SALT_FORTRAN_VERBOSE"
+
 // Configuration file environment variable
 #define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
 #define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/tau_config.yaml"
