@@ -20,6 +20,7 @@ limitations under the License.
 
 #include "flang/Common/idioms.h"
 
+#include "dprint.hpp"
 #include "flang_instrumentation_point.hpp"
 #include "flang_instrumentation_constants.hpp"
 
@@ -87,7 +88,7 @@ std::string salt::fortran::ProgramBeginInstrumentationPoint::instrumentationStri
 std::string salt::fortran::ProcedureBeginInstrumentationPoint::toString() const {
     std::stringstream ss;
     ss << InstrumentationPoint::toString();
-    ss << timerName() << "\t";
+    ss << "\"" << timerName() << "\"\t";
     return ss.str();
 }
 

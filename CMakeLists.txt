@@ -301,7 +301,7 @@ if(MLIR_FOUND AND Flang_FOUND)
     selectfile.cpp
     flang_source_location.cpp
     flang_instrumentation_point.cpp
-    salt_instrument_flang_plugin.cpp
+    flang_salt_instrument_plugin.cpp
     )
     list(TRANSFORM SALT_FLANG_PLUGIN_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 
