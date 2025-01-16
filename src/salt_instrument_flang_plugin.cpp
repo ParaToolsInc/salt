@@ -45,25 +45,14 @@ limitations under the License.
 #include "flang/Parser/source.h"
 #include "flang/Common/indirection.h"
 
+#include "flang_instrumentation_constants.hpp"
 #include "selectfile.hpp"
 #include "flang_source_location.hpp"
+#include "flang_instrumentation_point.hpp"
 
 // TODO Split declarations into a separate header file.
 // TODO Put debug output behind verbose flag
 
-#define SALT_FORTRAN_CONFIG_FILE_VAR "SALT_FORTRAN_CONFIG_FILE"
-#define SALT_FORTRAN_CONFIG_DEFAULT_PATH "config_files/tau_config.yaml"
-
-#define SALT_FORTRAN_SELECT_FILE_VAR "SALT_FORTRAN_SELECT_FILE"
-
-#define SALT_FORTRAN_KEY "Fortran"
-#define SALT_FORTRAN_PROGRAM_BEGIN_KEY "program_insert"
-#define SALT_FORTRAN_PROCEDURE_BEGIN_KEY "procedure_begin_insert"
-#define SALT_FORTRAN_PROCEDURE_END_KEY "procedure_end_insert"
-
-#define SALT_FORTRAN_TIMER_NAME_TEMPLATE R"(\$\{full_timer_name\})"
-#define SALT_FORTRAN_STRING_SPLITTER "&\n     &"
-#define SALT_F77_LINE_LENGTH 64
 
 using namespace Fortran::frontend;
 using namespace salt::fortran;

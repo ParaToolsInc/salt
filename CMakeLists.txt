@@ -202,8 +202,7 @@ set(SALT_HEADER_FILES
   dprint.hpp
   ryml_all.hpp
   selectfile.hpp
-  tau_datatypes.h
-  tooling.hpp
+  instrumentor.hpp
 )
 
 list(TRANSFORM SALT_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
@@ -230,6 +229,7 @@ list(TRANSFORM CPARSE_LLVM_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 # If we refactor into a library that executables link against it will simplify this and reduce repitition
 add_executable(cparse-llvm)
 target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
+target_sources(cparse-llvm PUBLIC FILE_SET headers TYPE HEADERS FILES ${SALT_HEADER_FILES})
 target_include_directories(cparse-llvm PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
 target_compile_features(cparse-llvm PUBLIC cxx_std_17)
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING) # Inherit definitions, compile features, etc.
@@ -291,20 +291,23 @@ if(MLIR_FOUND AND Flang_FOUND)
 
     set(SALT_FLANG_PLUGIN_HEADER_FILES
     selectfile.hpp
-    tau_datatypes.h
     flang_source_location.hpp
+    flang_instrumentation_constants.hpp
+    flang_instrumentation_point.hpp
     )
     list(TRANSFORM SALT_FLANG_PLUGIN_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
 
     set(SALT_FLANG_PLUGIN_SRCS
     selectfile.cpp
     flang_source_location.cpp
+    flang_instrumentation_point.cpp
     salt_instrument_flang_plugin.cpp
     )
     list(TRANSFORM SALT_FLANG_PLUGIN_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 
     add_library(salt-flang-plugin SHARED)
     target_sources(salt-flang-plugin PUBLIC ${SALT_FLANG_PLUGIN_SRCS})
+    target_sources(salt-flang-plugin PUBLIC FILE_SET headers TYPE HEADERS FILES ${SALT_FLANG_PLUGIN_HEADER_FILES})
     target_include_directories(salt-flang-plugin PUBLIC "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include" )
     target_compile_features(salt-flang-plugin PUBLIC cxx_std_17)
     target_link_libraries(salt-flang-plugin PUBLIC SALT_FLANG_FRONTEND)
