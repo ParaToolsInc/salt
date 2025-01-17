@@ -308,7 +308,8 @@ namespace salt::fortran {
                         const std::string splitTimerName{ss2.str()};
 
                         if (isInMainProgram_) {
-                            verboseStream() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line << ", "
+                            verboseStream() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line <<
+                                    ", "
                                     <<
                                     startLoc.column << "\n";
                             addProgramBeginInstrumentation(startLoc.line, splitTimerName);
@@ -404,6 +405,10 @@ namespace salt::fortran {
             return std::nullopt;
         }
 
+        static std::string lineDirective(const int line, const std::string &file) {
+            return "#line " + std::to_string(line) + " \"" + file + "\"";
+        }
+
         static void instrumentFile(const std::string &inputFilePath, llvm::raw_pwrite_stream &outputStream,
                                    const SaltInstrumentParseTreeVisitor &visitor,
                                    const InstrumentationMap &instMap) {
@@ -425,24 +430,37 @@ namespace salt::fortran {
                 DIE("ERROR: Instrumentation points not sorted by line number!\n");
             }
 
+            outputStream << lineDirective(1, inputFilePath) << "\n";
+
             auto instIter{instPts.cbegin()};
             while (std::getline(inputStream, lineText)) {
+                bool lineWasInstrumentedBefore{false};
+                bool lineWasInstrumentedAfter{false};
+                bool shouldOutputLine{true};
+
                 ++lineNum;
 
                 // First, process instrumentation points that come BEFORE this line.
                 while (instIter != instPts.cend() && (*instIter)->line() == lineNum && (*instIter)->location() ==
                        InstrumentationLocation::BEFORE) {
                     outputStream << (*instIter)->instrumentationString(instMap, lineText) << "\n";
+                    lineWasInstrumentedBefore = true;
                     ++instIter;
                 }
 
                 // Then, process instrumentation points that REPLACE this line.
-                bool shouldOutputLine{true};
                 while (instIter != instPts.cend() && (*instIter)->line() == lineNum && (*instIter)->location() ==
                        InstrumentationLocation::REPLACE) {
+                    outputStream << lineDirective(lineNum, inputFilePath) << "\n";
                     outputStream << (*instIter)->instrumentationString(instMap, lineText) << "\n";
+                    lineWasInstrumentedAfter = true;
                     shouldOutputLine = false;
                     ++instIter;
+                }
+
+                // If line was instrumented, output a #line directive
+                if (lineWasInstrumentedBefore) {
+                    outputStream << lineDirective(lineNum, inputFilePath) << "\n";
                 }
 
                 // Output the current line, if not replaced.
@@ -454,7 +472,13 @@ namespace salt::fortran {
                 while (instIter != instPts.cend() && (*instIter)->line() == lineNum && (*instIter)->location() ==
                        InstrumentationLocation::AFTER) {
                     outputStream << (*instIter)->instrumentationString(instMap, lineText) << "\n";
+                    lineWasInstrumentedAfter = true;
                     ++instIter;
+                }
+
+                // If line was instrumented, output a #line directive
+                if (lineWasInstrumentedAfter) {
+                    outputStream << lineDirective(lineNum+1, inputFilePath) << "\n";
                 }
             }
         }
