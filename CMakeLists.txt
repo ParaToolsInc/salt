@@ -82,7 +82,7 @@ set(CMAKE_CXX_STANDARD 17)
 #-----------------------------
 # Create the main SALT project
 #-----------------------------
-project(SALT-FM
+project(saltfm
   VERSION "${SALT_VERSION_MAJOR}.${SALT_VERSION_MINOR}"
   DESCRIPTION "An LLVM-based Source Analysis Tookit for HPC"
   HOMEPAGE_URL "https://github.com/ParaToolsInc/salt"
@@ -151,11 +151,6 @@ list(JOIN CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "\", \"-I" CLANG_HEADER_INCLUDES)
 set(CLANG_HEADER_INCLUDES "\"-I${CLANG_HEADER_INCLUDES}\"")
 message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
 message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
-configure_file(
-  "${CMAKE_SOURCE_DIR}/include/clang_header_includes.h.in" "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
-  @ONLY)
-
-
 
 #------------------------------------------
 # Specify clang and system libraries needed
@@ -206,12 +201,16 @@ set(SALT_HEADER_FILES
 )
 
 list(TRANSFORM SALT_HEADER_FILES PREPEND "${CMAKE_SOURCE_DIR}/include/")
-list(APPEND SALT_HEADER_FILES "${CMAKE_BINARY_DIR}/include/clang_header_includes.h")
-set_source_files_properties(
-  "${CMAKE_BINARY_DIR}/include/clang_header_includes.h"
-  PROPERTIES
-  GENERATED TRUE
-)
+foreach(HEADER clang_header_includes.h frontend.hpp)
+  configure_file(
+    "${CMAKE_SOURCE_DIR}/include/${HEADER}.in" "${CMAKE_BINARY_DIR}/include/${HEADER}" @ONLY)
+  list(APPEND SALT_HEADER_FILES "${CMAKE_BINARY_DIR}/include/${HEADER}")
+  set_source_files_properties(
+    "${CMAKE_BINARY_DIR}/include/${HEADER}"
+    PROPERTIES
+    GENERATED TRUE
+  )
+endforeach()
 
 set(CPARSE_LLVM_SRCS
   frontend.cpp
@@ -245,11 +244,12 @@ set_target_properties(cparse-llvm PROPERTIES
 #------------------------------------------------------
 # Handle config files in build directory & installation
 #------------------------------------------------------
-# Copy ${CMAKE_SOURCE_DIR}/config_files to ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/saltfm/config_files
-# and install them to ${CMAKE_INSTALL_DATADIR}/saltfm/config_files
+# Copy ${CMAKE_SOURCE_DIR}/config_files to
+# ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/${CMAKE_PROJECT_NAME}/config_files
+# and install them to ${CMAKE_INSTALL_DATADIR}/${CMAKE_PROJECT_NAME}/config_files
 file(COPY ${CMAKE_SOURCE_DIR}/config_files
-  DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/saltfm)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/saltfm
+  DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/${CMAKE_PROJECT_NAME})
+install(DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/${CMAKE_PROJECT_NAME}
   DESTINATION ${CMAKE_INSTALL_DATADIR})
 
 #---------------------
@@ -454,14 +454,6 @@ set_tests_properties(salt_parser_smoke_test
   PASS_REGULAR_EXPRESSION "OVERVIEW"
 )
 
-# Test fixtures to copy and cleanup config files
-add_test(NAME setup_inputs
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/config_files ./config_files)
-add_test(NAME cleanup_inputs
-  COMMAND ${CMAKE_COMMAND} -E rm -rf ./config_files)
-set_tests_properties(setup_inputs PROPERTIES FIXTURES_SETUP Configs)
-set_tests_properties(cleanup_inputs PROPERTIES FIXTURES_CLEANUP Configs)
-
 # Function to map tests_list to source files and setup parser tests
 function(add_instrumentor_test test_src)
   # This is 1 of 2 functions for adding tests
@@ -484,7 +476,6 @@ function(add_instrumentor_test test_src)
     COMMAND $<TARGET_FILE:cparse-llvm> ${CMAKE_SOURCE_DIR}/tests/${test_src})
   set_tests_properties(${TEST_NAME}
     PROPERTIES
-    FIXTURES_REQUIRED Configs
     REQUIRED_FILES "${CMAKE_SOURCE_DIR}/tests/${test_src}"
     PASS_REGULAR_EXPRESSION "[Ii]nstrumentation:"
   )

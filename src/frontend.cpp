@@ -1,4 +1,10 @@
+#ifdef __linux__
+#include <unistd.h>
+#elif __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #include "instrumentor.hpp"
+#include "frontend.hpp"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTTypeTraits.h"
@@ -26,11 +32,46 @@ using namespace clang;
 llvm::cl::opt<std::string> outputfile("tau_output", llvm::cl::desc("Specify name of output instrumented file"),
                                       llvm::cl::value_desc("filename"), llvm::cl::cat(MyToolCategory));
 
+std::string getExecutablePath() {
+    char buffer[1024];
+    std::string path;
 
-std::string getEnvCfgFile()
-{
-    char * val = getenv( "SALT_CONFIG_FILE" );
-    return val == NULL ? std::string("config_files/config.yaml") : std::string(val);
+    #ifdef __linux__
+    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+    if (len != -1) {
+        buffer[len] = '\0';
+        path = std::string(buffer);
+    }
+    #elif __APPLE__
+    uint32_t size = sizeof(buffer);
+    if (_NSGetExecutablePath(buffer, &size) == 0) {
+        path = std::string(buffer);
+    } else {
+        char *pathBuffer = new char[size];
+        if (_NSGetExecutablePath(pathBuffer, &size) == 0) {
+            path = std::string(pathBuffer);
+        }
+        delete[] pathBuffer;
+    }
+    #endif
+
+    // Remove the executable name from the path
+    size_t pos = path.find_last_of("/\\");
+    if (pos != std::string::npos) {
+        path = path.substr(0, pos);
+    }
+
+    return path;
+}
+
+std::string getEnvCfgFile() {
+    char *val = getenv("SALT_CONFIG_FILE");
+    if (val == NULL) {
+        std::string execPath = getExecutablePath();
+        return execPath + "/" + SALT_DEFAULT_CONFIG_FILE;
+    } else {
+        return std::string(val);
+    }
 }
 
 
