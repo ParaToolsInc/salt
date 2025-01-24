@@ -25,7 +25,8 @@ readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
 readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
 
 # get the absolute path of this script
-readonly _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly _SCRIPT_DIR
 
 SALT_PLUGIN_SO="${_SCRIPT_DIR}/../@CMAKE_INSTALL_LIBDIR@/${_SALTFM_PLUGIN_SO}"
 FORTRAN_CONFIG_FILE="${_SCRIPT_DIR}/../@CMAKE_INSTALL_DATADIR@/@CMAKE_PROJECT_NAME@/config_files/config.yaml"
@@ -39,33 +40,20 @@ OPTIONS:
 
 Generic Options:
 
-  --help                       - Display available options (--help-hidden for more)
-  --help-list                  - Display list of available options (--help-list-hidden for more)
+  --help                       - Display available options
   --version                    - Display the version of this program
 
 TAU instrumentor options:
-To pass options directly to the compiler, use
-        tooling [options] <source> -- [compiler options]
 
   --config_file=<filename>     - Specify path to SALT configuration YAML file
-  --extra-arg=<string>         - Additional argument to append to the compiler command line
-  --extra-arg-before=<string>  - Additional argument to prepend to the compiler command line
-  -p <string>                  - Build path
-  --tau_instrument_inline      - Instrument inlined functions (default: false)
   --tau_output=<filename>      - Specify name of output instrumented file
   --tau_select_file=<filename> - Provide a selective instrumentation specification file
-  --tau_use_cxx_api            - Use TAU's C++ instrumentation API
+  --show                       - Print the command line that would be executed by the wrapper script
 EOF
 
 # Add a help/usage message function
 function usage {
-    echo "Usage: $0 [-h] [-o output_file] [-show] input_file [args]"
-    echo "         -h: print this help message and exit"    
-    echo "         --tau_output=output_file: specify the output file name"
-    echo "         -show: print the command line without running it"
-    echo "          input_file: the Fortran source file to parse and instrument"
-    echo "          args: additional arguments to pass to the flang compiler (include flags etc.)"
-
+    echo "$_USAGE"
 }
 
 if [[ $# -eq 0 ]]; then
@@ -166,38 +154,35 @@ done
 #echo "Passed command line arguments: $*"
 
 args=()
-original_args=("$@")
-expecting_output_file=false
 expecting_arg_to_forward=false
 show=false
 for arg in "$@"; do
     #echo "working on arg: $arg"
-    if [[ $arg == -h ]]; then
+    if [[ $arg == --help ]]; then
         usage
         exit 0
-    elif $expecting_output_file; then
-        output_file="$arg"
-        expecting_output_file=false
-        shift || true
-        #echo "args remaining: $*"
+    elif [[ $arg == --version ]]; then
+        echo "SALT FM Version: ${_VERSION}"
+        flang-new -version
+        exit 0
     elif $expecting_arg_to_forward; then
         args+=("$arg")
         expecting_arg_to_forward=false
         shift
         #echo "args remaining: $*"
-    elif [[ $arg == --tau_output ]]; then
-        shift
-        expecting_output_file=true
-        #echo "args remaining: $*"
     elif [[ $arg == --tau_output=* ]]; then
         output_file="${arg#--tau_output=}"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_select_file=* ]]; then
+        select_file="${arg#--tau_select_file=}"
         shift || true
         #echo "args remaining: $*"
     elif [[ $arg == *.[Ff]90 || $arg == *.[Ff] || $arg == *.[Ff]03 ]]; then
         input_file="$arg"
         shift || true
         #echo "args remaining: $*"
-    elif [[ $arg == -show ]]; then
+    elif [[ $arg == --show ]]; then
         show=true
         shift || true
         #echo "args remaining: $*"
@@ -214,7 +199,7 @@ for arg in "$@"; do
         if [[ "${arg:-}" == -Werror ]]; then
             args+=("$arg")
         fi
-        # Flang frontend oesn't (yet) support -Wall, -Wextra, etc. only -Werror, so throw others away
+        # Flang frontend doesn't (yet) support -Wall, -Wextra, etc. only -Werror, so throw others away
         shift || true
         #echo "Added whitelisted warning flag: $arg"
     elif [[ ${arg:-} =~ ${_WHITELISTED_REGEX} ]]; then
@@ -256,6 +241,7 @@ if [[ -z "${output_file:-}" ]]; then
     fi
     
 fi
+
 echo "output file: ${output_file:-\"<None given>\" }"
 echo "Remaining Arguments: ${args[*]}"
 
@@ -269,10 +255,12 @@ cmd=(flang-new
     "${args[@]}")
 if $show; then
     echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
+    echo "SALT_FORTRAN_SELECT_FILE=\"${select_file:-}\""
     echo "cmd: ${cmd[*]}"
 else
     echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
+    echo "SALT_FORTRAN_SELECT_FILE=\"${select_file:-}\""
     echo "Running: ${cmd[*]}"
-    SALT_FORTRAN_CONFIG_FILE="${FORTRAN_CONFIG_FILE}" "${cmd[@]}"
+    SALT_FORTRAN_SELECT_FILE="${select_file:-}" SALT_FORTRAN_CONFIG_FILE="${FORTRAN_CONFIG_FILE}" "${cmd[@]}"
     exit $?
 fi

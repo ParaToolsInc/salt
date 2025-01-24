@@ -631,11 +631,11 @@ set(FORTRAN_TESTS_SOURCES_LIST
 
 # Add a smoke test of the fparse-llvm script
 add_test(NAME fparse_llvm_smoke_test
-  COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm -h)
+  COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm --help)
 set_tests_properties(fparse_llvm_smoke_test
   PROPERTIES
   LABELS smoke
-  PASS_REGULAR_EXPRESSION "Usage"
+  PASS_REGULAR_EXPRESSION "USAGE"
 )
 
 foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
