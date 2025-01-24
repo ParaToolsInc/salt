@@ -40,6 +40,7 @@ OPTIONS:
 
 Generic Options:
 
+  -h                           - Alias for --help
   --help                       - Display available options
   --version                    - Display the version of this program
 
@@ -158,7 +159,7 @@ expecting_arg_to_forward=false
 show=false
 for arg in "$@"; do
     #echo "working on arg: $arg"
-    if [[ $arg == --help ]]; then
+    if [[ $arg == --help || $arg == -h ]]; then
         usage
         exit 0
     elif [[ $arg == --version ]]; then
