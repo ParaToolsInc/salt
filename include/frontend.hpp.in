@@ -1,0 +1,2 @@
+// Define constants needed for the frontend
+#define SALT_DEFAULT_CONFIG_FILE "../@CMAKE_INSTALL_DATADIR@/@CMAKE_PROJECT_NAME@/config_files/config.yaml"
