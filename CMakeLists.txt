@@ -328,6 +328,10 @@ else()
     message(STATUS "Flang not found -- skipping Flang frontend plugin")
 endif()
 
+configure_file(${CMAKE_SOURCE_DIR}/src/saltfm.in ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm @ONLY)
+install(PROGRAMS ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
+  TYPE BIN) # TYPE BIN installs into CMAKE_INSTALL_BINDIR
+
 #---------------------
 # Find TAU locations for testing
 #---------------------
@@ -473,7 +477,7 @@ function(add_instrumentor_test test_src)
     set(TEST_NAME ${ARGV1})
   endif()
   add_test(NAME ${TEST_NAME}
-    COMMAND $<TARGET_FILE:cparse-llvm> ${CMAKE_SOURCE_DIR}/tests/${test_src})
+    COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm ${CMAKE_SOURCE_DIR}/tests/${test_src})
   set_tests_properties(${TEST_NAME}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_SOURCE_DIR}/tests/${test_src}"
@@ -536,7 +540,7 @@ function(compile_instrumented test_src)
   endif()
 
   set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
-  set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=$<TARGET_FILE:cparse-llvm> -optSaltConfigFile=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml)
+  set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm -optSaltConfigFile=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml)
   set(compile_opts ${TAU_COMPILE_OPTIONS})
   foreach(comp IN LISTS compilers_to_test)
     set(lower_comp ${comp})
@@ -640,11 +644,11 @@ set_tests_properties(fparse_llvm_smoke_test
 
 foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
   add_test(NAME instrument_${test_source}
-    COMMAND ./${CMAKE_INSTALL_BINDIR}/fparse-llvm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
+    COMMAND ./${CMAKE_INSTALL_BINDIR}/saltfm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
     )
   set_tests_properties(instrument_${test_source}
     PROPERTIES
-    REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm"
+    REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm;${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm"
     ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml;SALT_FORTRAN_VERBOSE=1"
     PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
   )

@@ -164,7 +164,7 @@ for arg in "$@"; do
         exit 0
     elif [[ $arg == --version ]]; then
         echo "SALT FM Version: ${_VERSION}"
-        flang-new -version
+        flang-new --version
         exit 0
     elif $expecting_arg_to_forward; then
         args+=("$arg")
@@ -221,20 +221,24 @@ done
 #echo "args: \"${args[*]}\""
 # print the argument list
 if [[ -z "${input_file:-}" ]]; then
-    input_file="${args[0]}"
-    args=("${args[@]:1}")
+    if [[ ${#args[@]} -gt 0 ]]; then
+        # An input file has not been recognized.
+        # Try to take the first argument as the input file
+        input_file="${args[0]}"
+        args=("${args[@]:1}")
+    fi
 fi
 
 echo "input file: ${input_file:-\"<None given>\" }"
 
 # If no output file is given, emit the output file in the current working directory
 if [[ -z "${output_file:-}" ]]; then
-    if [[ ${input_file} == *.* ]]; then
+    if [[ ${input_file:-none} == *.* ]]; then
       file_ext=".${input_file##*.}"
     else
         file_ext=""
     fi
-    if [[ "${input_file}" == */* ]]; then
+    if [[ "${input_file:-none}" == */* ]]; then
         output_file="${input_file%.*}.inst${file_ext//f/F}"
         output_file="$(pwd)/${output_file##*/}"
     else
