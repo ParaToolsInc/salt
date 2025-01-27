@@ -344,13 +344,13 @@ if(NOT DEFINED ENV{TAU_ROOT})
     PATH_SUFFIXES ${TAU_PATH_SUFFIXES}
   )
   if(NOT TAU_EXEC)
-    message(FATAL_ERROR "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
+    message(STATUS "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
   else()
     get_filename_component(TAU_ROOT ${TAU_EXEC} DIRECTORY) # This will be a bin directory
     get_filename_component(TAU_ROOT ${TAU_ROOT} DIRECTORY) # This might be an arch directory
     string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
   endif()
-  else()
+else()
     set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
 endif()
 
@@ -360,62 +360,38 @@ message(STATUS "TAU_ROOT: ${TAU_ROOT}")
 find_program(TAU_EXEC tau_exec
   PATHS ${TAU_ROOT}/x86_64 ${TAU_ROOT}/apple ${TAU_ROOT}/craycnl
   PATH_SUFFIXES bin
-  REQUIRED
 )
-get_filename_component(TAU_ARCH_DIR ${TAU_EXEC} DIRECTORY)
-get_filename_component(TAU_ARCH_DIR ${TAU_ARCH_DIR} DIRECTORY)
-message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
+if(TAU_EXEC)
+  set(HAVE_TAU TRUE)
+  get_filename_component(TAU_ARCH_DIR ${TAU_EXEC} DIRECTORY)
+  get_filename_component(TAU_ARCH_DIR ${TAU_ARCH_DIR} DIRECTORY)
+  message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
 
-find_file(TAU_CLANG_MAKEFILE
-  NAMES Makefile.tau-clang-pthread
-  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
-  REQUIRED
-)
-find_file(TAU_GCC_MAKEFILE
-  NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
-  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
-  REQUIRED
-)
-find_program(TAUCC tau_cc.sh
-  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
-  REQUIRED
-)
-find_program(TAUCXX tau_cxx.sh
-  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
-  REQUIRED
-)
-find_program(TAUF90 tau_f90.sh
-  PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
-  REQUIRED
-)
-file(GLOB TAU_GCC_LIBUNWIND_DIR ${TAU_ARCH_DIR}/libunwind-*-gcc)
-if(NOT TAU_GCC_LIBUNWIND_DIR)
-  message(FATAL_ERROR "libunwind not found for TAU's gcc build")
+  find_file(TAU_CLANG_MAKEFILE
+    NAMES Makefile.tau-clang-pthread
+    PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
+    REQUIRED
+  )
+  find_file(TAU_GCC_MAKEFILE
+    NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
+    PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
+    REQUIRED
+  )
+  find_program(TAUCC tau_cc.sh
+    PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
+    REQUIRED
+  )
+  find_program(TAUCXX tau_cxx.sh
+    PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
+    REQUIRED
+  )
+  find_program(TAUF90 tau_f90.sh
+    PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
+    REQUIRED
+  )
+else()
+  set(HAVE_TAU FALSE)
 endif()
-find_path(TAU_GCC_LIBUNWIND_INCLUDE_DIR
-  NAMES include
-  PATHS ${TAU_GCC_LIBUNWIND_DIR}
-  REQUIRED
-)
-file(GLOB TAU_CLANG_LIBUNWIND_DIR ${TAU_ARCH_DIR}/libunwind-*-clang)
-if(NOT TAU_CLANG_LIBUNWIND_DIR)
-  message(FATAL_ERROR "libunwind not found for TAU's clang build")
-endif()
-find_path(TAU_CLANG_LIBUNWIND_INCLUDE_DIR
-  NAMES include
-  PATHS ${TAU_CLANG_LIBUNWIND_DIR}
-  REQUIRED
-)
-find_path(TAU_GCC_LIBDWARF_INCLUDE_DIR
-  NAMES include
-  PATHS ${TAU_ARCH_DIR}/libdwarf-gcc
-  REQUIRED
-)
-find_path(TAU_CLANG_LIBDWARF_INCLUDE_DIR
-  NAMES include
-  PATHS ${TAU_ARCH_DIR}/libdwarf-clang
-  REQUIRED
-)
 
 #---------------
 # Tests
@@ -428,7 +404,6 @@ find_path(TAU_CLANG_LIBDWARF_INCLUDE_DIR
 # 5. TAU is installed with the following configuratins:
 #    - Makefile.tau-clang-pthread
 #    - Makefile.tau-pthread
-# 6. SALT parser configuration files are in ${CMAKE_SOURCE_DIR}/config_files
 
 # Care has been taken to break test inter-dependencies where possible and
 # express them explicitly with the DEPENDS test property.
@@ -505,120 +480,122 @@ foreach(comp IN LISTS compilers_to_test)
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${comp})
 endforeach()
 
-function(compile_instrumented test_src)
-  # This is the 2nd of 2 functions for adding tests.
-  # It is opinionated and perhaps somewhat fragile.
-  # Using the optional argument in this function and the previous one
-  # is untested and may cause issues.
-  # A more robust design might be to incorporate both functions into a
-  # single function.
-  get_filename_component(TEST_BASE_NAME ${test_src} NAME_WE)
-  set(TEST_NAME "${TEST_BASE_NAME}")
-  # This next line depends on the previous function implementation
-  set(depends_on instrument_${TEST_BASE_NAME}) # Right now this is just to prevent tests from running at the same time from clobbering the instrumented source file
-  get_filename_component(TEST_LANG ${test_src} LAST_EXT)
-  string(REPLACE "." "" TEST_LANG ${TEST_LANG})
-  set(extra_args ${ARGN})
-  list(LENGTH extra_args n_extra_args)
-  if(n_extra_args GREATER 1)
-    message(AUTHOR_WARNING
-      "Incorrect number of arguments (1 + ${n_extra_args}) passed to add_instrumentor_test!")
-    return()
-  endif()
-  if(n_extra_args EQUAL 1)
-    set(TEST_NAME ${ARGV1})
+if(HAVE_TAU)
+  function(compile_instrumented test_src)
+    # This is the 2nd of 2 functions for adding tests.
+    # It is opinionated and perhaps somewhat fragile.
+    # Using the optional argument in this function and the previous one
+    # is untested and may cause issues.
+    # A more robust design might be to incorporate both functions into a
+    # single function.
+    get_filename_component(TEST_BASE_NAME ${test_src} NAME_WE)
+    set(TEST_NAME "${TEST_BASE_NAME}")
     # This next line depends on the previous function implementation
-    set(depends_on instrument_${ARGV1})
-  endif()
+    set(depends_on instrument_${TEST_BASE_NAME}) # Right now this is just to prevent tests from running at the same time from clobbering the instrumented source file
+    get_filename_component(TEST_LANG ${test_src} LAST_EXT)
+    string(REPLACE "." "" TEST_LANG ${TEST_LANG})
+    set(extra_args ${ARGN})
+    list(LENGTH extra_args n_extra_args)
+    if(n_extra_args GREATER 1)
+      message(AUTHOR_WARNING
+        "Incorrect number of arguments (1 + ${n_extra_args}) passed to add_instrumentor_test!")
+      return()
+    endif()
+    if(n_extra_args EQUAL 1)
+      set(TEST_NAME ${ARGV1})
+      # This next line depends on the previous function implementation
+      set(depends_on instrument_${ARGV1})
+    endif()
 
-  if(${TEST_LANG} STREQUAL "c")
-    set(TAUC ${TAUCC})
-  elseif(${TEST_LANG} STREQUAL "cpp")
-    set(TAUC ${TAUCXX})
-  else()
-    message( FATAL_ERROR "Unknown test source file extension: ${TEST_LANG}")
-  endif()
+    if(${TEST_LANG} STREQUAL "c")
+      set(TAUC ${TAUCC})
+    elseif(${TEST_LANG} STREQUAL "cpp")
+      set(TAUC ${TAUCXX})
+    else()
+      message( FATAL_ERROR "Unknown test source file extension: ${TEST_LANG}")
+    endif()
 
-  set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
-  set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm -optSaltConfigFile=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml)
-  set(compile_opts ${TAU_COMPILE_OPTIONS})
-  foreach(comp IN LISTS compilers_to_test)
-    set(lower_comp ${comp})
-    string(TOUPPER ${comp} comp)
-    # Fixture to cleanup old instrumented source, object files, and executables
-    add_test(NAME rm_${lower_comp}_${TEST_NAME}_objects
-      COMMAND
-      ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.o ${TEST_BASE_NAME}.inst.o ${TEST_BASE_NAME}.inst.${TEST_LANG}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(rm_${lower_comp}_${TEST_NAME}_objects
-      PROPERTIES
-      FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_objects
-      DEPENDS setup_${comp}_dir
-    )
-    # Test to actually instrument and build the test source using TAU compiler wrappers & slat parser
-    add_test(NAME compile_${lower_comp}_${TEST_NAME}
-      COMMAND
-      ${TAUC} ${TAUC_OPTS} ${compiler_opts} -o ${TEST_BASE_NAME}.${lower_comp} ${test_path}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(compile_${lower_comp}_${TEST_NAME}
-      PROPERTIES
-      ENVIRONMENT TAU_MAKEFILE=${TAU_${comp}_MAKEFILE}
-      FIXTURES_REQUIRED clean_${lower_comp}_${TEST_NAME}_objects
-      DEPENDS ${depends_on}
-      FAIL_REGULAR_EXPRESSION "[Dd]isabling instrumentation of source code;[Ss]witching to compiler-based instrumentation;[Cc]ompiling with [Nn]on-[Ii]nstrumented [Rr]egular [Cc]ode;[Ee]rror:"
-    )
-    # Fixture to cleanup old profile directories
-    add_test(NAME rm_old_${lower_comp}_${TEST_NAME}_profiles
-      COMMAND
-      ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.d
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(rm_old_${lower_comp}_${TEST_NAME}_profiles
-      PROPERTIES
-      FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
-      DEPENDS setup_${comp}_dir
-    )
-    add_test(NAME mkdir_${TEST_BASE_NAME}.${lower_comp}.d
-      COMMAND
-      ${CMAKE_COMMAND} -E make_directory ${TEST_BASE_NAME}.d
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(mkdir_${TEST_BASE_NAME}.${lower_comp}.d
-      PROPERTIES
-      FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
-      DEPENDS rm_old_${lower_comp}_${TEST_NAME}_profiles
-    )
-    # Profile w/ TAU and Verify profiles are created
-    add_test(NAME run_${lower_comp}_${TEST_NAME}
-      COMMAND
-      ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}.${lower_comp}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(run_${lower_comp}_${TEST_NAME}
-      PROPERTIES
-      ENVIRONMENT "TAU_MAKEFILE=${TAU_${comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
-      DEPENDS compile_${lower_comp}_${TEST_NAME}
-      FIXTURES_REQUIRED clean_${lower_comp}_${TEST_NAME}_profiles
-      FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
-    )
-    add_test(NAME check_${lower_comp}_${TEST_NAME}_profile
-      COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(check_${lower_comp}_${TEST_NAME}_profile
-      PROPERTIES
-      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
-      FAIL_REGULAR_EXPRESSION "addr=\<0x"
-      DEPENDS run_${lower_comp}_${TEST_NAME}
-    )
+    set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
+    set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm -optSaltConfigFile=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml)
+    set(compile_opts ${TAU_COMPILE_OPTIONS})
+    foreach(comp IN LISTS compilers_to_test)
+      set(lower_comp ${comp})
+      string(TOUPPER ${comp} comp)
+      # Fixture to cleanup old instrumented source, object files, and executables
+      add_test(NAME rm_${lower_comp}_${TEST_NAME}_objects
+        COMMAND
+        ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.o ${TEST_BASE_NAME}.inst.o ${TEST_BASE_NAME}.inst.${TEST_LANG}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      )
+      set_tests_properties(rm_${lower_comp}_${TEST_NAME}_objects
+        PROPERTIES
+        FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_objects
+        DEPENDS setup_${comp}_dir
+      )
+      # Test to actually instrument and build the test source using TAU compiler wrappers & slat parser
+      add_test(NAME compile_${lower_comp}_${TEST_NAME}
+        COMMAND
+        ${TAUC} ${TAUC_OPTS} ${compiler_opts} -o ${TEST_BASE_NAME}.${lower_comp} ${test_path}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      )
+      set_tests_properties(compile_${lower_comp}_${TEST_NAME}
+        PROPERTIES
+        ENVIRONMENT TAU_MAKEFILE=${TAU_${comp}_MAKEFILE}
+        FIXTURES_REQUIRED clean_${lower_comp}_${TEST_NAME}_objects
+        DEPENDS ${depends_on}
+        FAIL_REGULAR_EXPRESSION "[Dd]isabling instrumentation of source code;[Ss]witching to compiler-based instrumentation;[Cc]ompiling with [Nn]on-[Ii]nstrumented [Rr]egular [Cc]ode;[Ee]rror:"
+      )
+      # Fixture to cleanup old profile directories
+      add_test(NAME rm_old_${lower_comp}_${TEST_NAME}_profiles
+        COMMAND
+        ${CMAKE_COMMAND} -E rm -rf ${TEST_BASE_NAME}.d
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      )
+      set_tests_properties(rm_old_${lower_comp}_${TEST_NAME}_profiles
+        PROPERTIES
+        FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
+        DEPENDS setup_${comp}_dir
+      )
+      add_test(NAME mkdir_${TEST_BASE_NAME}.${lower_comp}.d
+        COMMAND
+        ${CMAKE_COMMAND} -E make_directory ${TEST_BASE_NAME}.d
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      )
+      set_tests_properties(mkdir_${TEST_BASE_NAME}.${lower_comp}.d
+        PROPERTIES
+        FIXTURES_SETUP clean_${lower_comp}_${TEST_NAME}_profiles
+        DEPENDS rm_old_${lower_comp}_${TEST_NAME}_profiles
+      )
+      # Profile w/ TAU and Verify profiles are created
+      add_test(NAME run_${lower_comp}_${TEST_NAME}
+        COMMAND
+        ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}.${lower_comp}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      )
+      set_tests_properties(run_${lower_comp}_${TEST_NAME}
+        PROPERTIES
+        ENVIRONMENT "TAU_MAKEFILE=${TAU_${comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
+        DEPENDS compile_${lower_comp}_${TEST_NAME}
+        FIXTURES_REQUIRED clean_${lower_comp}_${TEST_NAME}_profiles
+        FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
+      )
+      add_test(NAME check_${lower_comp}_${TEST_NAME}_profile
+        COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      )
+      set_tests_properties(check_${lower_comp}_${TEST_NAME}_profile
+        PROPERTIES
+        PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
+        FAIL_REGULAR_EXPRESSION "addr=\<0x"
+        DEPENDS run_${lower_comp}_${TEST_NAME}
+      )
+    endforeach()
+  endfunction()
+
+  foreach(test_source IN LISTS TESTS_LIST)
+    compile_instrumented(${test_source})
   endforeach()
-endfunction()
-
-foreach(test_source IN LISTS TESTS_LIST)
-  compile_instrumented(${test_source})
-endforeach()
+endif()
 
 # Add some Fortran tests for SALT-FM
 set(FORTRAN_TESTS_SOURCES_LIST
@@ -666,59 +643,61 @@ foreach(compiler IN LISTS fortran_compilers_to_test)
   )
 endforeach()
 
-foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
-  # Get the name of the instrumented source file
-  get_filename_component(TEST_BASE_NAME ${test_source} NAME_WLE)
-  get_filename_component(TEST_LANG ${test_source} LAST_EXT)
-  # fparse-llvm is adding preprocessor directives and should emit uppercase file extensions (e.g., .F90)
-  string(TOUPPER ${TEST_LANG} TEST_LANG)
-  set(TEST_INST_SOURCE ${TEST_BASE_NAME}.inst${TEST_LANG})
+if(HAVE_TAU)
+  foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
+    # Get the name of the instrumented source file
+    get_filename_component(TEST_BASE_NAME ${test_source} NAME_WLE)
+    get_filename_component(TEST_LANG ${test_source} LAST_EXT)
+    # fparse-llvm is adding preprocessor directives and should emit uppercase file extensions (e.g., .F90)
+    string(TOUPPER ${TEST_LANG} TEST_LANG)
+    set(TEST_INST_SOURCE ${TEST_BASE_NAME}.inst${TEST_LANG})
 
-  foreach(compiler IN LISTS fortran_compilers_to_test)
-    STRING(TOUPPER ${compiler} upper_comp)
-    if(${compiler} STREQUAL "gfortran")
-      set(mapped_comp GCC)
-      set(EXTRA_FLAGS -Wpedantic -Wextra -Wno-missing-include-dirs -Werror)
-    elseif(${compiler} STREQUAL "flang-new")
-      set(mapped_comp CLANG)
-      set(EXTRA_FLAGS -Werror)
-    elseif(${compiler} STREQUAL "flang")
-      set(mapped_comp CLANG)
-      set(EXTRA_FLAGS -Werror)
-    else()
-      message(FATAL_ERROR "Unknown compiler: ${compiler}")
-    endif()
-    add_test(NAME compile_${upper_comp}_${test_source}
-      COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} -Wall ${EXTRA_FLAGS} ${CMAKE_BINARY_DIR}/${TEST_INST_SOURCE}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+    foreach(compiler IN LISTS fortran_compilers_to_test)
+      STRING(TOUPPER ${compiler} upper_comp)
+      if(${compiler} STREQUAL "gfortran")
+        set(mapped_comp GCC)
+        set(EXTRA_FLAGS -Wpedantic -Wextra -Wno-missing-include-dirs -Werror)
+      elseif(${compiler} STREQUAL "flang-new")
+        set(mapped_comp CLANG)
+        set(EXTRA_FLAGS -Werror)
+      elseif(${compiler} STREQUAL "flang")
+        set(mapped_comp CLANG)
+        set(EXTRA_FLAGS -Werror)
+      else()
+        message(FATAL_ERROR "Unknown compiler: ${compiler}")
+      endif()
+      add_test(NAME compile_${upper_comp}_${test_source}
+        COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} -Wall ${EXTRA_FLAGS} ${CMAKE_BINARY_DIR}/${TEST_INST_SOURCE}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+        )
+      set_tests_properties(compile_${upper_comp}_${test_source}
+        PROPERTIES
+        ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE}"
+        DEPENDS "instrument_${test_source}"
+        FIXTURES_REQUIRED ${upper_comp}_dir
+        FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
       )
-    set_tests_properties(compile_${upper_comp}_${test_source}
-      PROPERTIES
-      ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE}"
-      DEPENDS "instrument_${test_source}"
-      FIXTURES_REQUIRED ${upper_comp}_dir
-      FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
-    )
-    # Profile with TAU and Verify profiles are created
-    add_test(NAME run_${upper_comp}_${test_source}
-      COMMAND ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-    )
-    set_tests_properties(run_${upper_comp}_${test_source}
-      PROPERTIES
-      ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
-      DEPENDS compile_${upper_comp}_${test_source}
-      FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
-    )
-    add_test(NAME check_${upper_comp}_${test_source}_profile
-      COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-    )
-    set_tests_properties(check_${upper_comp}_${test_source}_profile
-      PROPERTIES
-      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
-      FAIL_REGULAR_EXPRESSION "addr=\<0x"
-      DEPENDS run_${upper_comp}_${test_source}
-    )
+      # Profile with TAU and Verify profiles are created
+      add_test(NAME run_${upper_comp}_${test_source}
+        COMMAND ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+      )
+      set_tests_properties(run_${upper_comp}_${test_source}
+        PROPERTIES
+        ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
+        DEPENDS compile_${upper_comp}_${test_source}
+        FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
+      )
+      add_test(NAME check_${upper_comp}_${test_source}_profile
+        COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+      )
+      set_tests_properties(check_${upper_comp}_${test_source}_profile
+        PROPERTIES
+        PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
+        FAIL_REGULAR_EXPRESSION "addr=\<0x"
+        DEPENDS run_${upper_comp}_${test_source}
+      )
+    endforeach()
   endforeach()
-endforeach()
+endif()
