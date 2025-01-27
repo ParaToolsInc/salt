@@ -516,7 +516,7 @@ if(HAVE_TAU)
     endif()
 
     set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
-    set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm -optSaltConfigFile=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml)
+    set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm)
     set(compile_opts ${TAU_COMPILE_OPTIONS})
     foreach(comp IN LISTS compilers_to_test)
       set(lower_comp ${comp})
@@ -626,7 +626,7 @@ foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
   set_tests_properties(instrument_${test_source}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm;${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm"
-    ENVIRONMENT "SALT_FORTRAN_CONFIG_FILE=${CMAKE_SOURCE_DIR}/config_files/tau_config.yaml;SALT_FORTRAN_VERBOSE=1"
+    ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
     PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
   )
 endforeach()
