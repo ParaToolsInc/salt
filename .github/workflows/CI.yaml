@@ -4,7 +4,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: paratools/salt-dev:1.1
+      image: ghcr.io/paratoolsinc/salt-dev:1.3
     steps:
       - uses: actions/checkout@v3
         with:
@@ -17,8 +17,33 @@ jobs:
       - name: Configure SALT
         run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
       - name: Compile SALT
+        id: build
         run: |
           echo "Cores: $(nproc) "
-          cmake --build build --parallel $(nproc) || cmake --build build --verbose
+          if cmake --build build --parallel $(nproc) ; then
+            echo "build_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "build_status=failure" >> $GITHUB_OUTPUT
+            echo "::error::Initial build failed, re-attempting build with verbose output but failing CI"
+            echo "Initial build failed, re-attempting build with verbose output but failing CI"
+            if ! cmake --build build --verbose ; then
+              echo "Verbose build failed on second attempt"
+              echo "::error::Verbose build failed on second attempt"
+              exit 1
+            fi
+          fi
       - name: Run Tests
-        run: cd build && ctest --output-on-failure
+        working-directory: build
+        run: |
+          if ! ctest -j --output-on-failure ; then
+            echo "::error::Tests failed, re-running tests with verbose output"
+            echo "Tests failed, re-running tests with verbose output"
+            if ! ctest --rerun-failed --verbose ; then
+              echo "Rerunning failed tests failed on second attempt"
+              echo "::error::Rerunning failed tests failed on second attempt"
+            fi
+            exit 1
+          fi
+      - name: Fail CI on build failure
+        if: ${{ steps.build.outputs.build_status == 'failure' }}
+        run: echo "Failing build" ; exit 1

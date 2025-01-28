@@ -85,7 +85,7 @@ void dump_inst_loc(inst_loc *loc)
     DPRINT("\tCol:                    %d\n", loc->col);
     DPRINT("\tKind:                 %s\n", loc_typ_strs[loc->kind]);
     DPRINT("\tRet type:         %s\n", loc->return_type);
-    DPRINT("\tName:                 %s\n", loc->func_name);
+    DPRINT("\tName:                 \"%s\"\n", loc->func_name);
     DPRINT("\tTimer:                    %s\n", loc->full_timer_name);
     DPRINT("\tHas args:         %s\n", loc->has_args ? "Yes" : "No");
     DPRINT("\tIs ret ptr:     %s\n", loc->is_return_ptr ? "Yes" : "No");
@@ -143,10 +143,11 @@ std::string ReplacePhrase(std::string str, std::string phrase, std::string to_re
 
 void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree)
 {
-
+    /* dump the location */
+    /* dump_inst_loc(loc); */
     if (!loc->skip)
     {
-        if (strcmp(loc->func_name, "main") == 0 && loc->has_args)
+        if (strcmp(loc->func_name, "main") == 0 )
         {
             // Insert on main function
             for (ryml::NodeRef const& child : yaml_tree["main_insert"].children()) 
@@ -155,6 +156,11 @@ void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree
                 ss << child.val();
                 std::string updated_str;
                 updated_str  = ReplacePhrase(ss.str(), "${full_timer_name}", loc->full_timer_name);
+                /* handle the case where main does NOT have arguments */
+                if (!loc->has_args)
+                {
+                    updated_str = ReplacePhrase(updated_str, "    TAU_INIT(&argc, &argv);", "/* TAU_INIT() skipped, no arguments */");
+                }
                 code += updated_str + "\n";
             }
         }
@@ -499,14 +505,6 @@ void makeFuncAndTimerNames(FunctionDecl *func, ASTContext *context, SourceManage
                std::to_string(start_col) + "}-{" + std::to_string(end_line) + "," + std::to_string(end_col) + "}]";
 }
 
-// borrowed from SourceLocation.h for use in fullyContains() replacement
-#if __clang_major__ < 10
-inline bool operator<=(const SourceLocation &LHS, const SourceLocation &RHS)
-{
-    return LHS.getRawEncoding() <= RHS.getRawEncoding();
-}
-#endif
-
 class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
 {
     ASTContext *context;
@@ -523,17 +521,8 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
     {
         for (SourceRange lambda : lambda_locs)
         {
-#if __clang_major__ > 9
             if (lambda.fullyContains(ret->getSourceRange()))
             {
-#else
-            SourceLocation lambda_begin = lambda.getBegin();
-            SourceLocation lambda_end = lambda.getEnd();
-            SourceLocation ret_begin = ret->getSourceRange().getBegin();
-            SourceLocation ret_end = ret->getSourceRange().getEnd();
-            if (lambda_begin <= ret_begin && ret_end <= lambda_end)
-            {
-#endif
                 // ignore lambdas
                 return true;
             }
@@ -590,44 +579,8 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
         if (encl_function->getReturnType()->isClassType())
         {
             CXXRecordDecl *decl = encl_function->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ > 10
             if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
             {
-#else // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
-            bool DefaultedCopyAssignmentIsDeleted = false;
-            if (const auto *Field = dyn_cast<FieldDecl>(decl))
-            {
-                QualType T = context->getBaseElementType(Field->getType());
-                if (T->isReferenceType())
-                {
-                    DefaultedCopyAssignmentIsDeleted = true;
-                }
-                if (const auto *RecordTy = T->getAs<RecordType>())
-                {
-                    auto *FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
-                    if (FieldRec->getDefinition())
-                    {
-                        if (decl->isUnion())
-                        {
-                            if (FieldRec->hasNonTrivialCopyAssignment())
-                            {
-                                DefaultedCopyAssignmentIsDeleted = true;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (T.isConstQualified())
-                    {
-                        DefaultedCopyAssignmentIsDeleted = true;
-                    }
-                }
-            }
-            if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
-                  decl->hasTrivialCopyAssignment()))
-            {
-#endif
                 needs_move = true;
             }
         }
@@ -728,44 +681,8 @@ class FindFunctionVisitor : public RecursiveASTVisitor<FindFunctionVisitor>
         if (func->getReturnType()->isClassType())
         {
             CXXRecordDecl *decl = func->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ > 10
             if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
             {
-#else // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
-            bool DefaultedCopyAssignmentIsDeleted = false;
-            if (const auto *Field = dyn_cast<FieldDecl>(decl))
-            {
-                QualType T = context->getBaseElementType(Field->getType());
-                if (T->isReferenceType())
-                {
-                    DefaultedCopyAssignmentIsDeleted = true;
-                }
-                if (const auto *RecordTy = T->getAs<RecordType>())
-                {
-                    auto *FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
-                    if (FieldRec->getDefinition())
-                    {
-                        if (decl->isUnion())
-                        {
-                            if (FieldRec->hasNonTrivialCopyAssignment())
-                            {
-                                DefaultedCopyAssignmentIsDeleted = true;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (T.isConstQualified())
-                    {
-                        DefaultedCopyAssignmentIsDeleted = true;
-                    }
-                }
-            }
-            if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
-                  decl->hasTrivialCopyAssignment()))
-            {
-#endif
                 needs_move = true;
             }
         }
@@ -1120,9 +1037,16 @@ void instrumentor::instrument()
         ryml::Tree yaml_tree;
         if (FILE *config_file = fopen(configfile.c_str(), "r"))
         {
-            std::string contents = file_get_contents(config_file);
-            yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(contents));
-            ryml::emit(yaml_tree, yaml_tree.root_id(), config_file);
+            std::ifstream inputStream{configfile.c_str()};
+            if (!inputStream) {
+                llvm::errs() << "ERROR: Could not open configuration file " << configfile.c_str() << "\n";
+                std::exit(-3);
+            }
+            std::stringstream configStream;
+            configStream << inputStream.rdbuf();
+            // TODO handle errors if config yaml doesn't parse
+            yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(configStream.str()));
+
             fclose(config_file);
         }
         else

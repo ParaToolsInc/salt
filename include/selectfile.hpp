@@ -72,6 +72,6 @@ extern std::list<std::string> fileincludelist;
 extern std::list<std::string> fileexcludelist;
 
 // void parseInstrumentationCommand(char *line, int lineno);
-void processInstrumentationRequests(const char *fname);
+bool processInstrumentationRequests(const char *fname);
 
 #endif

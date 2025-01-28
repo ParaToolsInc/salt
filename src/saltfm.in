@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Copyright (C) 2025, ParaTools, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script determines whether to call the SALTFM C/C++ or Fortran instrumentor
+# based on the file extension of the input source file or the --lang option.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+#set -o verbose
+#set -o xtrace
+
+readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
+# get the absolute path of this script
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly _SCRIPT_DIR
+
+read -r -d '' _USAGE <<EOF || true
+OVERVIEW: Tool for adding TAU instrumentation to source files.
+Note that this will only instrument the first source file given.
+USAGE: $0 [options] <source0> [... <sourceN>]
+
+OPTIONS:
+
+Generic SALTFM Options:
+
+  -h                           - Alias for --help
+  --help                       - Display available options (--help-hidden for more)
+  --help-fortran               - Display Fortran instrumentor options and usage information
+  --help-c                     - Display C/C++ instrumentor options and usage information
+  --help-cxx                   - Display C/C++ instrumentor options and usage information
+  --version                    - Display the version of this program
+  --lang=<string>              - Specify the language of the input source file (default: auto-detect)
+  --show                       - Print the command line that would be executed by the outter wrapper script
+
+TAU instrumentor options:
+
+  --config_file=<filename>     - Specify path to SALT configuration YAML file
+  --tau_instrument_inline      - Instrument inlined functions (default: false)
+  --tau_output=<filename>      - Specify name of output instrumented file
+  --tau_select_file=<filename> - Provide a selective instrumentation specification file
+  --tau_use_cxx_api            - Use TAU's C++ instrumentation API
+EOF
+
+# Add a help/usage message function
+function usage {
+    echo "$_USAGE"
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 1
+fi
+
+# Reconstruct argument list to forward to tool
+args=()
+for arg in "$@"; do
+    #echo "working on arg: $arg"
+    if [[ $arg == --lang=* ]]; then
+        lang="${arg#--lang=}"
+        case "${lang}" in
+            fortran|Fortran)
+                force_lang=fortran
+                tool=fparse-llvm
+            ;;
+            c|C|cxx|CXX|c++|C++)
+                force_lang=c
+                tool=cparse-llvm
+            ;;
+            *)
+                echo "Invalid language specified: $lang"
+                exit 1
+            ;;
+        esac
+    elif [[ $arg == --help || $arg == -h ]]; then
+        if [[ -n "${force_lang:-}" ]]; then
+            "${_SCRIPT_DIR}/${tool}" --help
+        else
+            usage
+        fi
+        exit 0
+    elif [[ $arg == --help-fortran ]]; then
+        "${_SCRIPT_DIR}/fparse-llvm" --help
+        exit 0
+    elif [[ $arg == --help-c || $arg == --help-cxx ]]; then
+        "${_SCRIPT_DIR}/cparse-llvm" --help
+        exit 0
+    elif [[ $arg == --version ]]; then
+        echo "SALT FM Version: ${_VERSION}"
+        if [[ -n "${tool:-}" ]]; then
+            "${_SCRIPT_DIR}/${tool}" --version
+        fi
+        exit 0
+    elif [[ $arg == *.[Ff]90 || $arg == *.[Ff] || $arg == *.[Ff]03 ]]; then
+        args+=("$arg")
+        if [[ -z "${tool:-}" ]]; then
+            tool=fparse-llvm
+        fi
+    elif [[ $arg == *.[cC] || $arg == *.[cC][cC] || $arg == *.cpp || $arg == *.CPP ]]; then
+        args+=("$arg")
+        if [[ -z "${tool:-}" ]]; then
+            tool=cparse-llvm
+        fi
+    elif [[ $arg == --show ]]; then
+        show=true
+    else
+        args+=("$arg")
+    fi
+done
+
+if [[ -z "${tool:-}" ]]; then
+    echo "No source files provided, language not detected."
+    exit 1
+fi
+
+# Check if the tool exists
+if [[ ! -f "${_SCRIPT_DIR}/${tool}" ]]; then
+    echo "Tool not found: ${_SCRIPT_DIR}/${tool}"
+    exit 1
+fi
+
+# Print the command line that would be executed by the outter wrapper script
+# if the --show flag is set
+if [[ "${show:-false}" == "true" ]]; then
+    if [[ "${tool}" == "fparse-llvm" ]]; then
+        echo "$tool --show ${args[*]}"
+        # fparse-llvm is also a wrapper script with a --show flag
+        # so print the command line that would be executed by the inner wrapper script
+        # if the language is Fortran
+        "${_SCRIPT_DIR}/fparse-llvm" --show "${args[@]}"
+    else
+        echo "$tool ${args[*]}"
+    fi
+    exit 0
+fi
+
+# Execute the tool with the arguments
+"${_SCRIPT_DIR}/${tool}" "${args[@]}"

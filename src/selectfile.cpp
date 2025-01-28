@@ -9,6 +9,10 @@
 #include "selectfile.hpp"
 #include "dprint.hpp"
 
+// TODO support all selective instrumentation types
+// TODO refactor this to class instead of using global variables
+// TODO modernize C++
+
 std::list<std::string> excludelist;
 std::list<std::string> includelist;
 std::list<std::string> fileincludelist;
@@ -684,7 +688,7 @@ void parseError(const char *message, char *line, int lineno, int column)
 
 #define SALT_UNUSED(expr) do { (void)(expr); } while (0)
 
-void processInstrumentationRequests(const char *fname)
+bool processInstrumentationRequests(const char *fname)
 {
 
   std::ifstream input(fname);
@@ -695,7 +699,8 @@ void processInstrumentationRequests(const char *fname)
 
 
   if (!input) {
-    std::cerr << "ERROR: Cannot open file: " << fname << std::endl;
+    std::cerr << "ERROR: Cannot open selective instrumentation file: " << fname << std::endl;
+    return false;
   }
 
 
@@ -731,8 +736,7 @@ void processInstrumentationRequests(const char *fname)
              the string. "#foo" becomes #foo and is passed on to the
              exclude list. */
           char *exclude = strdup(&inbuf[1]);
-          int i;
-          for (i = 0; i < strlen(exclude); i++) {
+          for (size_t i = 0; i < strlen(exclude); i++) {
             if (exclude[i] == '"') {
               exclude[i]='\0';
               break; /* out of the loop */
@@ -767,8 +771,7 @@ void processInstrumentationRequests(const char *fname)
              the string. "#foo" becomes #foo and is passed on to the
              exclude list. */
           char *exclude = strdup(&inbuf[1]);
-          int i;
-          for (i = 0; i < strlen(exclude); i++) {
+          for (size_t i = 0; i < strlen(exclude); i++) {
             if (exclude[i] == '"') {
               exclude[i]='\0';
               break; /* out of the loop */
@@ -801,7 +804,7 @@ void processInstrumentationRequests(const char *fname)
         // strip quotes
         if (inbuf[0] == '"') {
           char *include = strdup(&inbuf[1]);
-          for (int i = 0; i < strlen(include); i++) {
+          for (size_t i = 0; i < strlen(include); i++) {
             if (include[i] == '"') {
               include[i] = '\0';
               break;
@@ -834,7 +837,7 @@ void processInstrumentationRequests(const char *fname)
         // strip quotes
         if (inbuf[0] == '"') {
           char *exclude = strdup(&inbuf[1]);
-          for (int i = 0; i < strlen(exclude); i++) {
+          for (size_t i = 0; i < strlen(exclude); i++) {
             if (exclude[i] == '"') {
               exclude[i] = '\0';
               break;
@@ -883,4 +886,6 @@ void processInstrumentationRequests(const char *fname)
 
   DPRINT0("fileexcludelist\n");
   dump_list(fileexcludelist);
+
+  return true;
 }

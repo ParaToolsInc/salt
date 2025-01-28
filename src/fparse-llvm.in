@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+
+# Copyright (C) 2024, ParaTools, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+set -o errexit
+set -o nounset
+set -o pipefail
+#set -o verbose
+#set -o xtrace
+
+readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
+readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
+
+# get the absolute path of this script
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly _SCRIPT_DIR
+
+SALT_PLUGIN_SO="${_SCRIPT_DIR}/../@CMAKE_INSTALL_LIBDIR@/${_SALTFM_PLUGIN_SO}"
+FORTRAN_CONFIG_FILE="${_SCRIPT_DIR}/../@CMAKE_INSTALL_DATADIR@/@CMAKE_PROJECT_NAME@/config_files/config.yaml"
+
+read -r -d '' _USAGE <<EOF || true
+OVERVIEW: Tool for adding TAU instrumentation to source files.
+Note that this will only instrument the first source file given.
+USAGE: $0 [options] <source0> [... <sourceN>]
+
+OPTIONS:
+
+Generic Options:
+
+  -h                           - Alias for --help
+  --help                       - Display available options
+  --version                    - Display the version of this program
+
+TAU instrumentor options:
+
+  --config_file=<filename>     - Specify path to SALT configuration YAML file
+  --tau_output=<filename>      - Specify name of output instrumented file
+  --tau_select_file=<filename> - Provide a selective instrumentation specification file
+  --show                       - Print the command line that would be executed by the wrapper script
+EOF
+
+# Add a help/usage message function
+function usage {
+    echo "$_USAGE"
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 1
+fi
+
+# Set a whitelist of flags that can be passed to the flang frontend plugin
+# This is where libtooling for flang could help
+# List derived from output of `flang-new -fc1 -help`
+declare -a -r _WHITELISTED_FLAGS=( 
+  -cpp
+  -dM
+  -E
+  -falternative-parameter-statement
+  -fbackslash
+  -fcolor-diagnostics
+  -ffixed-form
+  -ffree-form
+  -fimplicit-none
+  -flogical-abbreviations
+  -fno-reformat
+  -fopenacc
+  -fopenmp-is-target-device
+  -fopenmp-target-debug
+  -fopenmp
+  -fsyntax-only
+  -funderscoring
+  -fxor-operator
+  -help
+  -init-only
+  -nocpp
+  -pedantic
+  -pthread
+  -P
+  -save-temps
+  -S
+  -version
+  -w
+  "-ffixed-line-length=.*"
+  "-finput-charset=.*"
+  "-fopenmp-version=.*"
+  "-save-temps=.*"
+  "-std=.*"
+)
+_WHITELISTED_REGEX="(${_WHITELISTED_FLAGS[0]})"
+# Loop over the secend element of _WHITELISTED_FLAGS to the end and add them to the regex
+for flag in "${_WHITELISTED_FLAGS[@]:1}"; do
+    _WHITELISTED_REGEX="${_WHITELISTED_REGEX}|(${flag})"
+done
+declare -r -a _BLACKLISTED_FLAGS=(
+    "^-Wl,.*"
+    '^--$'
+)
+_BLACKLISTED_REGEX="(${_BLACKLISTED_FLAGS[0]})"
+for flag in "${_BLACKLISTED_FLAGS[@]:1}"; do
+    _BLACKLISTED_REGEX="${_BLACKLISTED_REGEX}|(${flag})"
+done
+declare -r -a _WHITELISTED_FLAGS_WARNING_ARG=(
+    "-W[^l].*"
+)
+_WHITELISTED_WARNING_REGEX="(${_WHITELISTED_FLAGS_WARNING_ARG[0]})"
+for flag in "${_WHITELISTED_FLAGS_WARNING_ARG[@]:1}"; do
+    _WHITELISTED_WARNING_REGEX="${_WHITELISTED_WARNING_REGEX}|(${flag})"
+done
+declare -r -a _WHITELISTED_FLAGS_MAYBE_SPACE_ARG=(
+    "-I"
+    "-J"
+    "-D"
+    "-U"
+)
+for flag in "${_WHITELISTED_FLAGS_MAYBE_SPACE_ARG[@]}"; do
+    _WHITELISTED_REGEX="${_WHITELISTED_REGEX}|(${flag}.+)"
+done
+
+declare -r -a _WHITELISTED_FLAGS_YES_SPACE_ARG=(
+    "-module-dir"
+    "-module-suffix"
+    "-x"
+)
+_WHITELISTED_OPT_ARG_REGEX="(${_WHITELISTED_FLAGS_YES_SPACE_ARG[0]})"
+for flag in "${_WHITELISTED_FLAGS_YES_SPACE_ARG[@]:1}"; do
+    _WHITELISTED_OPT_ARG_REGEX="${_WHITELISTED_OPT_ARG_REGEX}|(${flag})"
+done
+for flag in "${_WHITELISTED_FLAGS_MAYBE_SPACE_ARG[@]}"; do
+    _WHITELISTED_OPT_ARG_REGEX="${_WHITELISTED_OPT_ARG_REGEX}|(${flag})"
+done
+
+# echo "WHITELISTED_REGEX: ${_WHITELISTED_REGEX}"
+# echo "BLACKLISTED_REGEX: ${_BLACKLISTED_REGEX}"
+# echo "WHITELISTED_WARNING_REGEX: ${_WHITELISTED_WARNING_REGEX}"
+# echo "WHITELISTED_OPT_ARG_REGEX: ${_WHITELISTED_OPT_ARG_REGEX}"
+
+
+# Loop over the arguments and check for the output file -o flag and it's argument
+# If found, set the output file name to the argument following the -o flag and remove the -o flag and argument from the argument list
+# If not found, set the output file name to the first argument with a .inst extension
+#echo "Passed command line arguments: $*"
+
+args=()
+expecting_arg_to_forward=false
+expecting_output_file=false
+expecting_config_file=false
+expecting_select_file=false
+show=false
+for arg in "$@"; do
+    #echo "working on arg: $arg"
+    if [[ $arg == --help || $arg == -h ]]; then
+        usage
+        exit 0
+    elif [[ $arg == --version ]]; then
+        echo "SALT FM Version: ${_VERSION}"
+        flang-new --version
+        exit 0
+    elif $expecting_arg_to_forward; then
+        args+=("$arg")
+        expecting_arg_to_forward=false
+        shift
+        #echo "args remaining: $*"
+    elif $expecting_output_file; then
+        output_file="$arg"
+        expecting_output_file=false
+        shift
+        #echo "args remaining: $*"
+    elif $expecting_config_file; then
+        FORTRAN_CONFIG_FILE="$arg"
+        expecting_config_file=false
+        shift
+        #echo "args remaining: $*"
+    elif $expecting_select_file; then
+        select_file="$arg"
+        expecting_select_file=false
+        shift
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_output ]]; then
+        expecting_output_file=true
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_output=* ]]; then
+        output_file="${arg#--tau_output=}"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_select_file ]]; then
+        expecting_select_file=true
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_select_file=* ]]; then
+        select_file="${arg#--tau_select_file=}"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == *.[Ff]90 || $arg == *.[Ff] || $arg == *.[Ff]03 ]]; then
+        input_file="$arg"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --show ]]; then
+        show=true
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --config_file ]]; then
+        expecting_config_file=true
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --config_file=* ]]; then
+        FORTRAN_CONFIG_FILE="${arg#--config_file=}"
+        shift || true
+        #echo "args remaining: $*"
+    # Begin sanitizing options/flags that cause the frontend plugin to throw an error
+    elif [[ ${arg:-} =~ $_BLACKLISTED_REGEX ]]; then
+        shift || true
+        echo "Removed blacklisted flag: $arg"
+    elif [[ "${arg:-}" =~ $_WHITELISTED_WARNING_REGEX ]]; then
+        # Only safe to do after ensuring -Wl,* blacklisted flag is removed
+        if [[ "${arg:-}" == -Werror ]]; then
+            args+=("$arg")
+        fi
+        # Flang frontend doesn't (yet) support -Wall, -Wextra, etc. only -Werror, so throw others away
+        shift || true
+        #echo "Added whitelisted warning flag: $arg"
+    elif [[ ${arg:-} =~ ${_WHITELISTED_REGEX} ]]; then
+        args+=("$arg")
+        shift || true
+        #echo "Added whitelisted flag: $arg"
+    elif [[ ${arg:-} =~ ${_WHITELISTED_OPT_ARG_REGEX} ]]; then
+        args+=("$arg")
+        expecting_arg_to_forward=true
+        shift || true
+        #echo "Added whitelisted flag with argument: $arg"
+    else
+        echo "Removed unknown flag: $arg"
+        shift || true
+    fi
+done
+
+#echo "args: \"${args[*]}\""
+# print the argument list
+if [[ -z "${input_file:-}" ]]; then
+    if [[ ${#args[@]} -gt 0 ]]; then
+        # An input file has not been recognized.
+        # Try to take the first argument as the input file
+        input_file="${args[0]}"
+        args=("${args[@]:1}")
+    fi
+fi
+
+echo "input file: ${input_file:-\"<None given>\" }"
+
+# If no output file is given, emit the output file in the current working directory
+if [[ -z "${output_file:-}" ]]; then
+    if [[ ${input_file:-none} == *.* ]]; then
+      file_ext=".${input_file##*.}"
+    else
+        file_ext=""
+    fi
+    if [[ "${input_file:-none}" == */* ]]; then
+        output_file="${input_file%.*}.inst${file_ext//f/F}"
+        output_file="$(pwd)/${output_file##*/}"
+    else
+        output_file="$(pwd)/${input_file%.*}.inst${file_ext//f/F}"
+    fi
+    
+fi
+
+echo "output file: ${output_file:-\"<None given>\" }"
+echo "Remaining Arguments: ${args[*]}"
+
+# This script invokes an LLVM flang frontend plugin to parse and instrument Fortran code
+cmd=(flang-new
+    -fc1
+    -load "${SALT_PLUGIN_SO}"
+    -plugin salt-instrument
+    "${input_file}" 
+    -o "${output_file}"
+    "${args[@]}")
+if $show; then
+    echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
+    echo "SALT_FORTRAN_SELECT_FILE=\"${select_file:-}\""
+    echo "cmd: ${cmd[*]}"
+else
+    echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
+    echo "SALT_FORTRAN_SELECT_FILE=\"${select_file:-}\""
+    echo "Running: ${cmd[*]}"
+    SALT_FORTRAN_SELECT_FILE="${select_file:-}" SALT_FORTRAN_CONFIG_FILE="${FORTRAN_CONFIG_FILE}" "${cmd[@]}"
+    exit $?
+fi
