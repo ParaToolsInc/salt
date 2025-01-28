@@ -529,15 +529,15 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
     {
         for (SourceRange lambda : lambda_locs)
         {
-#if __clang_major__ > 9
-            if (lambda.fullyContains(ret->getSourceRange()))
-            {
-#else
+#if __clang_major__ < 10
             SourceLocation lambda_begin = lambda.getBegin();
             SourceLocation lambda_end = lambda.getEnd();
             SourceLocation ret_begin = ret->getSourceRange().getBegin();
             SourceLocation ret_end = ret->getSourceRange().getEnd();
             if (lambda_begin <= ret_begin && ret_end <= lambda_end)
+            {
+#else
+            if (lambda.fullyContains(ret->getSourceRange()))
             {
 #endif
                 // ignore lambdas
@@ -596,10 +596,8 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
         if (encl_function->getReturnType()->isClassType())
         {
             CXXRecordDecl *decl = encl_function->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ > 10
-            if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
-            {
-#else // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
+#if __clang_major__ < 11
+            // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
             bool DefaultedCopyAssignmentIsDeleted = false;
             if (const auto *Field = dyn_cast<FieldDecl>(decl))
             {
@@ -632,6 +630,9 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
             }
             if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
                   decl->hasTrivialCopyAssignment()))
+            {
+#else
+            if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
             {
 #endif
                 needs_move = true;
@@ -734,10 +735,8 @@ class FindFunctionVisitor : public RecursiveASTVisitor<FindFunctionVisitor>
         if (func->getReturnType()->isClassType())
         {
             CXXRecordDecl *decl = func->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ > 10
-            if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
-            {
-#else // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
+#if __clang_major__ < 11
+            // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
             bool DefaultedCopyAssignmentIsDeleted = false;
             if (const auto *Field = dyn_cast<FieldDecl>(decl))
             {
@@ -770,6 +769,9 @@ class FindFunctionVisitor : public RecursiveASTVisitor<FindFunctionVisitor>
             }
             if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
                   decl->hasTrivialCopyAssignment()))
+            {
+#else
+            if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
             {
 #endif
                 needs_move = true;
