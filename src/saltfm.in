@@ -20,7 +20,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 #set -o verbose
-set -o xtrace
+#set -o xtrace
 
 readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
 # get the absolute path of this script
