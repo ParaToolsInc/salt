@@ -106,8 +106,8 @@ for flag in "${_WHITELISTED_FLAGS[@]:1}"; do
     _WHITELISTED_REGEX="${_WHITELISTED_REGEX}|(${flag})"
 done
 declare -r -a _BLACKLISTED_FLAGS=(
-    "-Wl,.*"
-    "--"
+    "^-Wl,.*"
+    '^--$'
 )
 _BLACKLISTED_REGEX="(${_BLACKLISTED_FLAGS[0]})"
 for flag in "${_BLACKLISTED_FLAGS[@]:1}"; do
@@ -156,6 +156,9 @@ done
 
 args=()
 expecting_arg_to_forward=false
+expecting_output_file=false
+expecting_config_file=false
+expecting_select_file=false
 show=false
 for arg in "$@"; do
     #echo "working on arg: $arg"
@@ -171,8 +174,31 @@ for arg in "$@"; do
         expecting_arg_to_forward=false
         shift
         #echo "args remaining: $*"
+    elif $expecting_output_file; then
+        output_file="$arg"
+        expecting_output_file=false
+        shift
+        #echo "args remaining: $*"
+    elif $expecting_config_file; then
+        FORTRAN_CONFIG_FILE="$arg"
+        expecting_config_file=false
+        shift
+        #echo "args remaining: $*"
+    elif $expecting_select_file; then
+        select_file="$arg"
+        expecting_select_file=false
+        shift
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_output ]]; then
+        expecting_output_file=true
+        shift || true
+        #echo "args remaining: $*"
     elif [[ $arg == --tau_output=* ]]; then
         output_file="${arg#--tau_output=}"
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --tau_select_file ]]; then
+        expecting_select_file=true
         shift || true
         #echo "args remaining: $*"
     elif [[ $arg == --tau_select_file=* ]]; then
@@ -185,6 +211,10 @@ for arg in "$@"; do
         #echo "args remaining: $*"
     elif [[ $arg == --show ]]; then
         show=true
+        shift || true
+        #echo "args remaining: $*"
+    elif [[ $arg == --config_file ]]; then
+        expecting_config_file=true
         shift || true
         #echo "args remaining: $*"
     elif [[ $arg == --config_file=* ]]; then
