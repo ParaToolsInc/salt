@@ -59,4 +59,3 @@ spack:
   specs:
   - llvm@git.086d8e6bb5daf8de43880ba90258c49e0fabf2c9=19.1.4 +flang +mlir openmp=project
   - mpich ~wrapperrpath
-  
