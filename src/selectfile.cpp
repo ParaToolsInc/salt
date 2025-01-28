@@ -736,8 +736,7 @@ bool processInstrumentationRequests(const char *fname)
              the string. "#foo" becomes #foo and is passed on to the
              exclude list. */
           char *exclude = strdup(&inbuf[1]);
-          int i;
-          for (i = 0; i < strlen(exclude); i++) {
+          for (size_t i = 0; i < strlen(exclude); i++) {
             if (exclude[i] == '"') {
               exclude[i]='\0';
               break; /* out of the loop */
@@ -772,8 +771,7 @@ bool processInstrumentationRequests(const char *fname)
              the string. "#foo" becomes #foo and is passed on to the
              exclude list. */
           char *exclude = strdup(&inbuf[1]);
-          int i;
-          for (i = 0; i < strlen(exclude); i++) {
+          for (size_t i = 0; i < strlen(exclude); i++) {
             if (exclude[i] == '"') {
               exclude[i]='\0';
               break; /* out of the loop */
@@ -806,7 +804,7 @@ bool processInstrumentationRequests(const char *fname)
         // strip quotes
         if (inbuf[0] == '"') {
           char *include = strdup(&inbuf[1]);
-          for (int i = 0; i < strlen(include); i++) {
+          for (size_t i = 0; i < strlen(include); i++) {
             if (include[i] == '"') {
               include[i] = '\0';
               break;
@@ -839,7 +837,7 @@ bool processInstrumentationRequests(const char *fname)
         // strip quotes
         if (inbuf[0] == '"') {
           char *exclude = strdup(&inbuf[1]);
-          for (int i = 0; i < strlen(exclude); i++) {
+          for (size_t i = 0; i < strlen(exclude); i++) {
             if (exclude[i] == '"') {
               exclude[i] = '\0';
               break;
