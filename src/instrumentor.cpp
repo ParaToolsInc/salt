@@ -505,14 +505,6 @@ void makeFuncAndTimerNames(FunctionDecl *func, ASTContext *context, SourceManage
                std::to_string(start_col) + "}-{" + std::to_string(end_line) + "," + std::to_string(end_col) + "}]";
 }
 
-// borrowed from SourceLocation.h for use in fullyContains() replacement
-#if __clang_major__ < 10
-inline bool operator<=(const SourceLocation &LHS, const SourceLocation &RHS)
-{
-    return LHS.getRawEncoding() <= RHS.getRawEncoding();
-}
-#endif
-
 class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
 {
     ASTContext *context;
@@ -529,17 +521,8 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
     {
         for (SourceRange lambda : lambda_locs)
         {
-#if __clang_major__ < 10
-            SourceLocation lambda_begin = lambda.getBegin();
-            SourceLocation lambda_end = lambda.getEnd();
-            SourceLocation ret_begin = ret->getSourceRange().getBegin();
-            SourceLocation ret_end = ret->getSourceRange().getEnd();
-            if (lambda_begin <= ret_begin && ret_end <= lambda_end)
-            {
-#else
             if (lambda.fullyContains(ret->getSourceRange()))
             {
-#endif
                 // ignore lambdas
                 return true;
             }
@@ -596,45 +579,8 @@ class FindReturnVisitor : public RecursiveASTVisitor<FindReturnVisitor>
         if (encl_function->getReturnType()->isClassType())
         {
             CXXRecordDecl *decl = encl_function->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ < 11
-            // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
-            bool DefaultedCopyAssignmentIsDeleted = false;
-            if (const auto *Field = dyn_cast<FieldDecl>(decl))
-            {
-                QualType T = context->getBaseElementType(Field->getType());
-                if (T->isReferenceType())
-                {
-                    DefaultedCopyAssignmentIsDeleted = true;
-                }
-                if (const auto *RecordTy = T->getAs<RecordType>())
-                {
-                    auto *FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
-                    if (FieldRec->getDefinition())
-                    {
-                        if (decl->isUnion())
-                        {
-                            if (FieldRec->hasNonTrivialCopyAssignment())
-                            {
-                                DefaultedCopyAssignmentIsDeleted = true;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (T.isConstQualified())
-                    {
-                        DefaultedCopyAssignmentIsDeleted = true;
-                    }
-                }
-            }
-            if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
-                  decl->hasTrivialCopyAssignment()))
-            {
-#else
             if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
             {
-#endif
                 needs_move = true;
             }
         }
@@ -735,45 +681,8 @@ class FindFunctionVisitor : public RecursiveASTVisitor<FindFunctionVisitor>
         if (func->getReturnType()->isClassType())
         {
             CXXRecordDecl *decl = func->getReturnType()->getAsCXXRecordDecl();
-#if __clang_major__ < 11
-            // borrow logic of llvm 10 DeclCXX.cpp for setting DefaultedCopyAssignmentIsDeleted
-            bool DefaultedCopyAssignmentIsDeleted = false;
-            if (const auto *Field = dyn_cast<FieldDecl>(decl))
-            {
-                QualType T = context->getBaseElementType(Field->getType());
-                if (T->isReferenceType())
-                {
-                    DefaultedCopyAssignmentIsDeleted = true;
-                }
-                if (const auto *RecordTy = T->getAs<RecordType>())
-                {
-                    auto *FieldRec = cast<CXXRecordDecl>(RecordTy->getDecl());
-                    if (FieldRec->getDefinition())
-                    {
-                        if (decl->isUnion())
-                        {
-                            if (FieldRec->hasNonTrivialCopyAssignment())
-                            {
-                                DefaultedCopyAssignmentIsDeleted = true;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (T.isConstQualified())
-                    {
-                        DefaultedCopyAssignmentIsDeleted = true;
-                    }
-                }
-            }
-            if (!((!decl->hasUserDeclaredCopyAssignment() && !DefaultedCopyAssignmentIsDeleted) ||
-                  decl->hasTrivialCopyAssignment()))
-            {
-#else
             if (!(decl->hasSimpleCopyAssignment() || decl->hasTrivialCopyAssignment()))
             {
-#endif
                 needs_move = true;
             }
         }
