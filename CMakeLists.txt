@@ -238,7 +238,7 @@ target_link_options(cparse-llvm PUBLIC -Wl,--as-needed -Wl,--no-allow-shlib-unde
 target_compile_definitions(cparse-llvm PUBLIC $<$<CONFIG:Debug>:DEBUG_NO_WAY>)
 # Install the target
 install(TARGETS cparse-llvm DESTINATION ${CMAKE_INSTALL_BINDIR})
-set_target_properties(cparse-llvm PROPERTIES 
+set_target_properties(cparse-llvm PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}")
 
 #------------------------------------------------------
@@ -267,7 +267,8 @@ endif()
 
 if(MLIR_FOUND AND Flang_FOUND)
     message(STATUS "Found Flang -- will build Flang frontend plugin")
-                
+    set(TEST_FORTRAN TRUE)
+
 # Variables set in FlangConfig.cmake
     message(STATUS "FLANG_CMAKE_DIR: ${FLANG_CMAKE_DIR}")
     message(STATUS "FLANG_EXPORTED_TARGETS: ${FLANG_EXPORTED_TARGETS}")
@@ -400,10 +401,9 @@ endif()
 # 1. Test source files to be instrumented are located in ${CMAKE_SOURCE_DIR}/tests/
 # 2. Tests are currently not using MPI
 # 3. Only pthread threading is assumed
-# 4. TAU is installed into the default location of /usr/local/x86_64
-# 5. TAU is installed with the following configuratins:
+# 4. TAU is installed with the following configuratins:
 #    - Makefile.tau-clang-pthread
-#    - Makefile.tau-pthread
+#    - Makefile.tau-pthread-pdt
 
 # Care has been taken to break test inter-dependencies where possible and
 # express them explicitly with the DEPENDS test property.
@@ -507,16 +507,20 @@ if(HAVE_TAU)
       set(depends_on instrument_${ARGV1})
     endif()
 
-    if(${TEST_LANG} STREQUAL "c")
+    if(${TEST_LANG} MATCHES "^[cC]$")
       set(TAUC ${TAUCC})
-    elseif(${TEST_LANG} STREQUAL "cpp")
+      set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
+    elseif(${TEST_LANG} MATCHES "^(cpp|CPP)$")
       set(TAUC ${TAUCXX})
+      set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
+    elseif(${TEST_LANG} MATCHES "^[fF](90)?$")
+      set(TAUC ${TAUF90})
+      set(test_path ${CMAKE_SOURCE_DIR}/tests/fortran/${TEST_BASE_NAME}.${TEST_LANG})
     else()
       message( FATAL_ERROR "Unknown test source file extension: ${TEST_LANG}")
     endif()
 
-    set(test_path ${CMAKE_SOURCE_DIR}/tests/${TEST_BASE_NAME}.${TEST_LANG})
-    set(TAUC_OPTS -optVerbose -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm)
+    set(TAUC_OPTS -optVerbose -optNoRevert -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm)
     set(compile_opts ${TAU_COMPILE_OPTIONS})
     foreach(comp IN LISTS compilers_to_test)
       set(lower_comp ${comp})
@@ -592,112 +596,121 @@ if(HAVE_TAU)
     endforeach()
   endfunction()
 
+  # This works, but a more thorough comparison of the fortran test setup with the C/C++ setup
+  # is needed and the directory naming is awkward when using Fortran sources in the above function.
+  # list(APPEND TESTS_LIST
+  #   funcsub.f90
+  #   myhi.f
+  # )
+
   foreach(test_source IN LISTS TESTS_LIST)
     compile_instrumented(${test_source})
   endforeach()
 endif()
 
-# Add some Fortran tests for SALT-FM
-set(FORTRAN_TESTS_SOURCES_LIST
-  myhi.f
-  cubes.f
-  emptyprog.f90
-  funcsub.f90
-  hello.f90
-  loop_test.f90
-  trivial.f90
-  return-only.f90
-  if-stmt.f90
-)
-
-# Add a smoke test of the fparse-llvm script
-add_test(NAME fparse_llvm_smoke_test
-  COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm --help)
-set_tests_properties(fparse_llvm_smoke_test
-  PROPERTIES
-  LABELS smoke
-  PASS_REGULAR_EXPRESSION "USAGE"
-)
-
-foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
-  add_test(NAME instrument_${test_source}
-    COMMAND ./${CMAKE_INSTALL_BINDIR}/saltfm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
-    )
-  set_tests_properties(instrument_${test_source}
-    PROPERTIES
-    REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm;${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm"
-    ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
-    PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
+if (TEST_FORTRAN)
+  # Add some Fortran tests for SALT-FM
+  set(FORTRAN_TESTS_SOURCES_LIST
+    myhi.f
+    cubes.f
+    emptyprog.f90
+    funcsub.f90
+    hello.f90
+    loop_test.f90
+    trivial.f90
+    return-only.f90
+    if-stmt.f90
   )
-endforeach()
 
-set(fortran_compilers_to_test gfortran flang-new)
-set(TAU_F90_OPTS -optVerbose -optLinkOnly)
-foreach(compiler IN LISTS fortran_compilers_to_test)
-  STRING(TOUPPER ${compiler} upper_comp)
-  add_test(NAME setup_${compiler}_dir
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${upper_comp})
-  set_tests_properties(setup_${compiler}_dir
+  # Add a smoke test of the fparse-llvm script
+  add_test(NAME fparse_llvm_smoke_test
+    COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm --help)
+  set_tests_properties(fparse_llvm_smoke_test
     PROPERTIES
-    FIXTURES_SETUP ${upper_comp}_dir
+    LABELS smoke
+    PASS_REGULAR_EXPRESSION "USAGE"
   )
-endforeach()
 
-if(HAVE_TAU)
   foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
-    # Get the name of the instrumented source file
-    get_filename_component(TEST_BASE_NAME ${test_source} NAME_WLE)
-    get_filename_component(TEST_LANG ${test_source} LAST_EXT)
-    # fparse-llvm is adding preprocessor directives and should emit uppercase file extensions (e.g., .F90)
-    string(TOUPPER ${TEST_LANG} TEST_LANG)
-    set(TEST_INST_SOURCE ${TEST_BASE_NAME}.inst${TEST_LANG})
-
-    foreach(compiler IN LISTS fortran_compilers_to_test)
-      STRING(TOUPPER ${compiler} upper_comp)
-      if(${compiler} STREQUAL "gfortran")
-        set(mapped_comp GCC)
-        set(EXTRA_FLAGS -Wpedantic -Wextra -Wno-missing-include-dirs -Werror)
-      elseif(${compiler} STREQUAL "flang-new")
-        set(mapped_comp CLANG)
-        set(EXTRA_FLAGS -Werror)
-      elseif(${compiler} STREQUAL "flang")
-        set(mapped_comp CLANG)
-        set(EXTRA_FLAGS -Werror)
-      else()
-        message(FATAL_ERROR "Unknown compiler: ${compiler}")
-      endif()
-      add_test(NAME compile_${upper_comp}_${test_source}
-        COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} -Wall ${EXTRA_FLAGS} ${CMAKE_BINARY_DIR}/${TEST_INST_SOURCE}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-        )
-      set_tests_properties(compile_${upper_comp}_${test_source}
-        PROPERTIES
-        ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE}"
-        DEPENDS "instrument_${test_source}"
-        FIXTURES_REQUIRED ${upper_comp}_dir
-        FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
+    add_test(NAME instrument_${test_source}
+      COMMAND ./${CMAKE_INSTALL_BINDIR}/saltfm ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
       )
-      # Profile with TAU and Verify profiles are created
-      add_test(NAME run_${upper_comp}_${test_source}
-        COMMAND ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-      )
-      set_tests_properties(run_${upper_comp}_${test_source}
-        PROPERTIES
-        ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
-        DEPENDS compile_${upper_comp}_${test_source}
-        FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
-      )
-      add_test(NAME check_${upper_comp}_${test_source}_profile
-        COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-      )
-      set_tests_properties(check_${upper_comp}_${test_source}_profile
-        PROPERTIES
-        PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
-        FAIL_REGULAR_EXPRESSION "addr=\<0x"
-        DEPENDS run_${upper_comp}_${test_source}
-      )
-    endforeach()
+    set_tests_properties(instrument_${test_source}
+      PROPERTIES
+      REQUIRED_FILES "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm;${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm"
+      ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
+      PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
+    )
   endforeach()
+
+  set(fortran_compilers_to_test gfortran flang-new)
+  foreach(compiler IN LISTS fortran_compilers_to_test)
+    STRING(TOUPPER ${compiler} upper_comp)
+    add_test(NAME setup_${compiler}_dir
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${upper_comp})
+    set_tests_properties(setup_${compiler}_dir
+      PROPERTIES
+      FIXTURES_SETUP ${upper_comp}_dir
+    )
+  endforeach()
+
+  # TODO use the generic function above to add and process the Fortran tests.
+  if(HAVE_TAU)
+    set(TAU_F90_OPTS -optVerbose -optNoRevert -optSaltInst -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm)
+    foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
+      # Get the name of the instrumented source file
+      get_filename_component(TEST_BASE_NAME ${test_source} NAME_WLE)
+      get_filename_component(TEST_LANG ${test_source} LAST_EXT)
+      # fparse-llvm is adding preprocessor directives and should emit uppercase file extensions (e.g., .F90)
+      set(TEST_INST_SOURCE ${CMAKE_SOURCE_DIR}/tests/fortran/${TEST_BASE_NAME}${TEST_LANG})
+
+      foreach(compiler IN LISTS fortran_compilers_to_test)
+        STRING(TOUPPER ${compiler} upper_comp)
+        if(${compiler} STREQUAL "gfortran")
+          set(mapped_comp GCC)
+          set(EXTRA_FLAGS -cpp -Wpedantic -Wextra -Wno-missing-include-dirs -Werror)
+        elseif(${compiler} STREQUAL "flang-new")
+          set(mapped_comp CLANG)
+          set(EXTRA_FLAGS -Werror)
+        elseif(${compiler} STREQUAL "flang")
+          set(mapped_comp CLANG)
+          set(EXTRA_FLAGS -Werror)
+        else()
+          message(FATAL_ERROR "Unknown compiler: ${compiler}")
+        endif()
+        add_test(NAME compile_${upper_comp}_${test_source}
+          COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${TEST_BASE_NAME} -Wall ${EXTRA_FLAGS} ${TEST_INST_SOURCE}
+          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+          )
+        set_tests_properties(compile_${upper_comp}_${test_source}
+          PROPERTIES
+          ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE}"
+          DEPENDS "instrument_${test_source}"
+          FIXTURES_REQUIRED ${upper_comp}_dir
+          FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
+        )
+        # Profile with TAU and Verify profiles are created
+        add_test(NAME run_${upper_comp}_${test_source}
+          COMMAND ${TAU_EXEC} -T serial,pthread ./${TEST_BASE_NAME}
+          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+        )
+        set_tests_properties(run_${upper_comp}_${test_source}
+          PROPERTIES
+          ENVIRONMENT "TAU_MAKEFILE=${TAU_${mapped_comp}_MAKEFILE};PROFILEDIR=${TEST_BASE_NAME}.d"
+          DEPENDS compile_${upper_comp}_${test_source}
+          FAIL_REGULAR_EXPRESSION "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
+        )
+        add_test(NAME check_${upper_comp}_${test_source}_profile
+          COMMAND ${CMAKE_COMMAND} -E cat ./${TEST_BASE_NAME}.d/profile.0.0.0
+          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+        )
+        set_tests_properties(check_${upper_comp}_${test_source}_profile
+          PROPERTIES
+          PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
+          FAIL_REGULAR_EXPRESSION "addr=\<0x"
+          DEPENDS run_${upper_comp}_${test_source}
+        )
+      endforeach()
+    endforeach()
+  endif()
 endif()
