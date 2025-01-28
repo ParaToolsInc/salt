@@ -184,7 +184,7 @@ add_library(SALT_LLVM_TOOLING INTERFACE)
 target_compile_features(SALT_LLVM_TOOLING INTERFACE cxx_std_17)
 target_include_directories(SALT_LLVM_TOOLING INTERFACE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(SALT_LLVM_TOOLING INTERFACE ${LLVM_DEFINITIONS_LIST})
-target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Wpedantic $<$<CONFIG:Debug>:-Wno-gnu-zero-variadic-macro-arguments>)
+target_compile_options(SALT_LLVM_TOOLING INTERFACE ${USE_RTTI} -Wall -Wpedantic -Wno-unused-variable $<$<CONFIG:Debug>:-Wno-gnu-zero-variadic-macro-arguments>)
 target_link_libraries(SALT_LLVM_TOOLING INTERFACE ${CLANG_LIBS} ${LLVM_LIBS})
 
 #---------------------------------
@@ -284,7 +284,7 @@ if(MLIR_FOUND AND Flang_FOUND)
     target_compile_features(SALT_FLANG_FRONTEND INTERFACE cxx_std_17)
     target_include_directories(SALT_FLANG_FRONTEND INTERFACE ${LLVM_INCLUDE_DIRS} ${FLANG_INCLUDE_DIRS})
     target_compile_definitions(SALT_FLANG_FRONTEND INTERFACE ${LLVM_DEFINITIONS_LIST})
-    target_compile_options(SALT_FLANG_FRONTEND INTERFACE ${USE_RTTI} -Wall -Werror -Wpedantic)
+    target_compile_options(SALT_FLANG_FRONTEND INTERFACE ${USE_RTTI} -Wall -Wno-unused-variable -Werror -Wpedantic)
 
 # Endianness definitions are required, and Flang does not export a definitions list
     include(TestBigEndian)
