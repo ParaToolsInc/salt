@@ -211,6 +211,7 @@ namespace salt::fortran {
             }
 
             bool Pre(const Fortran::parser::SubroutineStmt &subroutineStmt) {
+                isInMainProgram_ = false;
                 const auto &name = std::get<Fortran::parser::Name>(subroutineStmt.t);
                 subprogramName_ = name.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
@@ -230,6 +231,7 @@ namespace salt::fortran {
             }
 
             bool Pre(const Fortran::parser::FunctionStmt &functionStmt) {
+                isInMainProgram_ = false;
                 const auto &name = std::get<Fortran::parser::Name>(functionStmt.t);
                 subprogramName_ = name.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
