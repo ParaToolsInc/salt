@@ -654,7 +654,7 @@ if (TEST_FORTRAN)
   endforeach()
 
   add_test(NAME check-internal-func.f90
-    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/internal-func.inst.f90
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/internal-func.inst.F90
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
   set_tests_properties(check-internal-func.f90
