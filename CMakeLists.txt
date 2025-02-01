@@ -629,6 +629,7 @@ if (TEST_FORTRAN)
     trivial.f90
     return-only.f90
     if-stmt.f90
+    internal-func.f90
   )
 
   # Add a smoke test of the fparse-llvm script
@@ -651,6 +652,16 @@ if (TEST_FORTRAN)
       PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
     )
   endforeach()
+
+  add_test(NAME check-internal-func.f90
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/internal-func.inst.F90
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+  set_tests_properties(check-internal-func.f90
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "[\n\r]+[\t ]+&add "
+    DEPENDS instrument_internal-func.f90
+  )
 
   set(fortran_compilers_to_test gfortran flang-new)
   foreach(compiler IN LISTS fortran_compilers_to_test)
