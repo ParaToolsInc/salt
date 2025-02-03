@@ -272,7 +272,33 @@ endif()
 
 if(MLIR_FOUND AND Flang_FOUND)
     message(STATUS "Found Flang -- will build Flang frontend plugin")
+    set(SALT_MOD_SUFFIX ".saltmod" CACHE STRING "TAU Root Directory")
+    set(SALT_INC_DIR ${CMAKE_INSTALL_INCLUDEDIR}/salt/flang CACHE STRING "SALT include directory for Flang intrinsic modules")
     set(TEST_FORTRAN TRUE)
+
+# Find the llvm-flang directory containing the intrinsic modules so that we can copy them and give them the SALT_MOD_SUFFIX
+    LIST(LENGTH FLANG_INCLUDE_DIRS NUM_FLANG_INCLUDE_DIRS)
+    message(DEBUG "NUM_FLANG_INCLUDE_DIRS: ${NUM_FLANG_INCLUDE_DIRS}")
+    if(NUM_FLANG_INCLUDE_DIRS EQUAL 1)
+      set(FLANG_INTRINSIC_MOD_DIR ${FLANG_INCLUDE_DIRS})
+    else()
+      set(FLANG_INTRINSIC_MOD_DIR ${FLANG_INSTALL_PREFIX})
+    endif()
+    message(DEBUG "FLANG_INTRINSIC_MOD_DIR: ${FLANG_INTRINSIC_MOD_DIR}")
+    find_path(FLANG_INTRINSIC_MODS
+      NAMES "ISO_Fortran_env.mod" "iso_fortran_env.mod" "ISO_fortran_env.mod" "iso_Fortran_env.mod"
+      HINTS ${FLANG_INCLUDE_DIRS}
+      PATH_SUFFIXES "flang" "${CMAKE_INSTALL_INCLUDEDIR}/flang"
+      REQUIRED
+    )
+    message(STATUS "FLANG_INTRINSIC_MODS_DIR: ${FLANG_INTRINSIC_MODS}")
+
+    # Get a list of intrinsic module files that we will need to copy and change the extnsion for
+    file(GLOB INTRINSIC_MOD_FILES
+      LIST_DIRECTORIES false
+      ${FLANG_INTRINSIC_MODS}/*.mod
+    )
+    message(STATUS "Found flang intrinsic module files: ${INTRINSIC_MOD_FILES}")
 
 # Variables set in FlangConfig.cmake
     message(STATUS "FLANG_CMAKE_DIR: ${FLANG_CMAKE_DIR}")
@@ -334,6 +360,19 @@ if(MLIR_FOUND AND Flang_FOUND)
     install(PROGRAMS ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm
       TYPE BIN) # TYPE BIN installs into CMAKE_INSTALL_BINDIR
 
+    # Copy the flang intrinsic module files into the salt include directory in the build tree and change the file extension to SALT_MOD_SUFFIX
+    foreach(INTRINSIC_MOD_FILE IN LISTS INTRINSIC_MOD_FILES)
+      get_filename_component(INTRINSIC_MOD_BASE ${INTRINSIC_MOD_FILE} NAME_WLE)
+      set(SALT_INTRINSIC_MOD_FILE ${CMAKE_BINARY_DIR}/${SALT_INC_DIR}/${INTRINSIC_MOD_BASE}${SALT_MOD_SUFFIX})
+      message(STATUS "Copying ${INTRINSIC_MOD_FILE} to ${SALT_INTRINSIC_MOD_FILE}")
+      file(COPY ${INTRINSIC_MOD_FILE} DESTINATION ${CMAKE_BINARY_DIR}/${SALT_INC_DIR})
+      file(RENAME ${CMAKE_BINARY_DIR}/${SALT_INC_DIR}/${INTRINSIC_MOD_BASE}.mod ${SALT_INTRINSIC_MOD_FILE})
+    endforeach()
+
+    # Install the flang intrinsic module files into the salt include directory
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_INCLUDEDIR}/salt
+      TYPE INCLUDE)
+
 else()
     message(STATUS "Flang not found -- skipping Flang frontend plugin")
 endif()
@@ -361,7 +400,7 @@ if(NOT DEFINED ENV{TAU_ROOT})
     string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
   endif()
 else()
-    set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
+  set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
 endif()
 
 # Find the TAU makefiles, executables, scripts, libraries, etc.
@@ -630,6 +669,7 @@ if (TEST_FORTRAN)
     return-only.f90
     if-stmt.f90
     internal-func.f90
+    interface_test.f90
   )
 
   # Add a smoke test of the fparse-llvm script
@@ -688,7 +728,7 @@ if (TEST_FORTRAN)
         STRING(TOUPPER ${compiler} upper_comp)
         if(${compiler} STREQUAL "gfortran")
           set(mapped_comp GCC)
-          set(EXTRA_FLAGS -cpp -Wpedantic -Wextra -Wno-missing-include-dirs -Werror)
+          set(EXTRA_FLAGS -cpp -Wpedantic -Wextra -Wno-unused-function -Wno-missing-include-dirs -Werror)
         elseif(${compiler} STREQUAL "flang-new")
           set(mapped_comp CLANG)
           set(EXTRA_FLAGS -Werror)
