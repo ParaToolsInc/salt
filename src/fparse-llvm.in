@@ -23,10 +23,12 @@ set -o pipefail
 
 readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
 readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
+readonly _SALT_MOD_SUFFIX=@SALT_MOD_SUFFIX@
 
 # get the absolute path of this script
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly _SCRIPT_DIR
+readonly _SALT_INC_DIR="${_SCRIPT_DIR}/../@SALT_INC_DIR@"
 
 SALT_PLUGIN_SO="${_SCRIPT_DIR}/../@CMAKE_INSTALL_LIBDIR@/${_SALTFM_PLUGIN_SO}"
 FORTRAN_CONFIG_FILE="${_SCRIPT_DIR}/../@CMAKE_INSTALL_DATADIR@/@CMAKE_PROJECT_NAME@/config_files/config.yaml"
@@ -285,6 +287,8 @@ cmd=(flang-new
     -fc1
     -load "${SALT_PLUGIN_SO}"
     -plugin salt-instrument
+    -module-suffix "${_SALT_MOD_SUFFIX}"
+    -I"${_SALT_INC_DIR}"
     "${input_file}" 
     -o "${output_file}"
     "${args[@]}")
