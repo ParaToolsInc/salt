@@ -27,7 +27,7 @@ Fortran:
 #   ${full_timer_name}: "procedure_name [file_path {start}-{end}]"
   instrumentation: tauFortran
   program_insert:
-    - |-
+    - |-2
       ! SALT-FM injected TAU instrumentation
             integer, save :: tauProfileTimer(2) = [0, 0]
             call TAU_PROFILE_INIT()
@@ -39,7 +39,7 @@ Fortran:
       #endif
 
   procedure_begin_insert:
-    - |-
+    - |-2
       ! SALT-FM injected TAU instrumentation
             integer, save :: tauProfileTimer(2) = [0, 0]
             call TAU_PROFILE_TIMER(tauProfileTimer, "${full_timer_name}&
@@ -47,18 +47,18 @@ Fortran:
             call TAU_PROFILE_START(tauProfileTimer)
 
   procedure_end_insert:
-    - |-
+    - |-2
       ! SALT-FM injected TAU instrumentation
             call TAU_PROFILE_STOP(tauProfileTimer)
 
   pure_procedure_begin_insert:
-    - |-
+    - |-2
       ! SALT-FM injected TAU instrumentation
             call TAU_START("&${full_timer_name}&
            &")
 
   pure_procedure_end_insert:
-    - |-
+    - |-2
       ! SALT-FM injected TAU instrumentation
             call TAU_STOP("${full_timer_name}&
            &")
