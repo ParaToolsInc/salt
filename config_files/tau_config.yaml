@@ -26,21 +26,22 @@ Fortran:
 # Config variables:
 #   ${full_timer_name}: "procedure_name [file_path {start}-{end}]"
   instrumentation: tauFortran
+  # use YAML block literal style with indentation indicators
+  # see https://stackoverflow.com/questions/3790454/how-do-i-break-a-string-in-yaml-over-multiple-lines
+  # Editors might complain about the indentation, but it is correct
   program_insert:
     - |-2
-      ! SALT-FM injected TAU instrumentation
             integer, save :: tauProfileTimer(2) = [0, 0]
             call TAU_PROFILE_INIT()
             call TAU_PROFILE_TIMER(tauProfileTimer, "${full_timer_name}&
            &")
             call TAU_PROFILE_START(tauProfileTimer)
       #ifndef TAU_MPI
-            call  TAU_PROFILE_SET_NODE(0)
+            call TAU_PROFILE_SET_NODE(0)
       #endif
 
   procedure_begin_insert:
     - |-2
-      ! SALT-FM injected TAU instrumentation
             integer, save :: tauProfileTimer(2) = [0, 0]
             call TAU_PROFILE_TIMER(tauProfileTimer, "${full_timer_name}&
            &")
@@ -48,17 +49,14 @@ Fortran:
 
   procedure_end_insert:
     - |-2
-      ! SALT-FM injected TAU instrumentation
             call TAU_PROFILE_STOP(tauProfileTimer)
 
   pure_procedure_begin_insert:
     - |-2
-      ! SALT-FM injected TAU instrumentation
             call TAU_START("&${full_timer_name}&
            &")
 
   pure_procedure_end_insert:
     - |-2
-      ! SALT-FM injected TAU instrumentation
             call TAU_STOP("${full_timer_name}&
            &")
