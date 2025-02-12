@@ -86,9 +86,10 @@ namespace salt::fortran {
                 }
             }
 
-            void addProcedureEndInstrumentation(const int end_line) {
+            void addProcedureEndInstrumentation(const int end_line, const std::string &timer_name) {
                 if (shouldInstrument()) {
-                    instrumentationPoints_.emplace_back(std::make_unique<ProcedureEndInstrumentationPoint>(end_line));
+                    instrumentationPoints_.emplace_back(
+                        std::make_unique<ProcedureEndInstrumentationPoint>(end_line, timer_name));
                 }
             }
 
@@ -280,7 +281,26 @@ namespace salt::fortran {
 
                     const auto &startLoc{startLocOpt.value()};
                     const auto &endLoc{endLocOpt.value()};
+                    std::stringstream ss;
+                    ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
+                    ss << " [{" << startLoc.sourceFile->path() << "} {";
+                    ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
+                    ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
+                    ss << endLoc.line + 1;
+                    ss << ",1}]"; // TODO column number, last char of end stmt
 
+                    const std::string timerName{ss.str()};
+
+                    // Split the timerName string so that it will fit between Fortran 77's 72-character limit,
+                    // and use character string line continuation syntax compatible with Fortran 77 and modern
+                    // Fortran.
+                    std::stringstream ss2;
+                    for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
+                        ss2 << SALT_FORTRAN_STRING_SPLITTER;
+                        ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
+                    }
+
+                    const std::string splitTimerName{ss2.str()};
                     // Insert the timer start in the Pre phase (when we first visit the node)
                     // and the timer stop in the Post phase (when we return after visiting the node's children).
                     if (pre) {
@@ -288,26 +308,7 @@ namespace salt::fortran {
                         //      the last statement, but there could be whitespace/comments. Need to actually
                         //      find the end statement. End statement may not have source position if name
                         //      not listed -- need to find workaround.
-                        std::stringstream ss;
-                        ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
-                        ss << " [{" << startLoc.sourceFile->path() << "} {";
-                        ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
-                        ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
-                        ss << endLoc.line + 1;
-                        ss << ",1}]"; // TODO column number, last char of end stmt
 
-                        const std::string timerName{ss.str()};
-
-                        // Split the timerName string so that it will fit between Fortran 77's 72-character limit,
-                        // and use character string line continuation syntax compatible with Fortran 77 and modern
-                        // Fortran.
-                        std::stringstream ss2;
-                        for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
-                            ss2 << SALT_FORTRAN_STRING_SPLITTER;
-                            ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
-                        }
-
-                        const std::string splitTimerName{ss2.str()};
 
                         if (isInMainProgram_) {
                             verboseStream() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line <<
@@ -323,7 +324,7 @@ namespace salt::fortran {
                         }
                     } else {
                         verboseStream() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
-                        addProcedureEndInstrumentation(endLoc.line);
+                        addProcedureEndInstrumentation(endLoc.line, splitTimerName);
                     }
                 }
             }
@@ -364,7 +365,6 @@ namespace salt::fortran {
                     };
                     verboseStream() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
                             << "(" << endPos.line << "," << endPos.column << ")\n";
-                    // TODO handle return <value> case
                     // TODO handle multi-line
                     // TODO handle line continuation if too long
                     addIfReturnStmtInstrumentation(startPos.line, endPos.column);

@@ -1,0 +1,58 @@
+# Config variables:
+#   ${full_timer_name}: "function_name [file_path {start}-{end}]"
+
+instrumentation: TAU
+include:
+  - <Profile/Profiler.h>
+
+main_insert:
+  - "    TAU_PROFILE_TIMER(tautimer, \"${full_timer_name}\", \" \", TAU_DEFAULT);"
+  - "    TAU_INIT(&argc, &argv);"
+  - "#ifndef TAU_MPI"
+  - "#ifndef TAU_SHMEM"
+  - "    TAU_PROFILE_SET_NODE(0);"
+  - "#endif /* TAU_SHMEM */"
+  - "#endif /* TAU_MPI */"
+  - "    TAU_PROFILE_START(tautimer);"
+
+function_begin_insert:
+  - "    TAU_PROFILE_TIMER(tautimer, \"${full_timer_name}\", \" \", TAU_USER);"
+  - "    TAU_PROFILE_START(tautimer);"
+
+function_end_insert:
+  - "TAU_PROFILE_STOP(tautimer);"
+
+Fortran:
+# Config variables:
+#   ${full_timer_name}: "procedure_name [file_path {start}-{end}]"
+  instrumentation: tauFortran
+  # use YAML block literal style with indentation indicators
+  # see https://stackoverflow.com/questions/3790454/how-do-i-break-a-string-in-yaml-over-multiple-lines
+  # Editors might complain about the indentation, but it is correct
+  program_insert:
+    - |-2
+            call TAU_START("${full_timer_name}&
+           &")
+      #ifndef TAU_MPI
+            call TAU_PROFILE_SET_NODE(0)
+      #endif
+
+  procedure_begin_insert:
+    - |-2
+            call TAU_START("${full_timer_name}&
+           &")
+
+  procedure_end_insert:
+    - |-2
+            call TAU_STOP("${full_timer_name}&
+           &")
+
+  pure_procedure_begin_insert:
+    - |-2
+            call TAU_START("&${full_timer_name}&
+           &")
+
+  pure_procedure_end_insert:
+    - |-2
+            call TAU_STOP("${full_timer_name}&
+           &")

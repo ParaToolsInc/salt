@@ -128,14 +128,25 @@ namespace salt::fortran {
     private:
         const std::string timerName_;
     };
+class ProcedureEndInstrumentationPoint final : public InstrumentationPoint {
+public:
+    ProcedureEndInstrumentationPoint(const int line, std::string timerName) : InstrumentationPoint(
+        InstrumentationPointType::PROCEDURE_END, line, InstrumentationLocation::AFTER),
+        timerName_(std::move(timerName)) {
+    }
 
-    class ProcedureEndInstrumentationPoint final : public InstrumentationPoint {
-    public:
-        explicit ProcedureEndInstrumentationPoint(const int line) : InstrumentationPoint(
-            InstrumentationPointType::PROCEDURE_END, line, InstrumentationLocation::AFTER) {
-        }
-    };
+    [[nodiscard]] std::string timerName() const {
+        return timerName_;
+    }
 
+    [[nodiscard]] std::string toString() const override;
+
+    [[nodiscard]] std::string instrumentationString(const InstrumentationMap &instMap,
+                                                    const std::string &lineText) const override;
+
+private:
+    const std::string timerName_;
+};
     class ReturnStmtInstrumentationPoint final : public InstrumentationPoint {
     public:
         explicit ReturnStmtInstrumentationPoint(const int line) : InstrumentationPoint(

@@ -99,6 +99,20 @@ std::string salt::fortran::ProcedureBeginInstrumentationPoint::instrumentationSt
     return std::regex_replace(instTemplate, timerNameRegex, timerName());
 }
 
+std::string salt::fortran::ProcedureEndInstrumentationPoint::toString() const {
+    std::stringstream ss;
+    ss << InstrumentationPoint::toString();
+    ss << "\"" << timerName() << "\"\t";
+    return ss.str();
+}
+
+std::string salt::fortran::ProcedureEndInstrumentationPoint::instrumentationString(
+    const InstrumentationMap &instMap, [[maybe_unused]] const std::string &lineText) const {
+    static std::regex timerNameRegex{SALT_FORTRAN_TIMER_NAME_TEMPLATE};
+    const std::string instTemplate{InstrumentationPoint::instrumentationString(instMap, lineText)};
+    return std::regex_replace(instTemplate, timerNameRegex, timerName());
+}
+
 std::string salt::fortran::IfReturnStmtInstrumentationPoint::toString() const {
     std::stringstream ss;
     ss << InstrumentationPoint::toString();
