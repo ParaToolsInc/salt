@@ -27,21 +27,38 @@ Fortran:
 #   ${full_timer_name}: "procedure_name [file_path {start}-{end}]"
   instrumentation: tauFortran
   program_insert:
-    - "      integer, save :: tauProfileTimer(2) = [0, 0]"
-    - "      call TAU_PROFILE_INIT()"
-    - "      call TAU_PROFILE_TIMER(tauProfileTimer, \"${full_timer_name}&"
-    - "     &\")"
-    - "      call TAU_PROFILE_START(tauProfileTimer)"
-    - "#ifndef TAU_MPI"
-    - "      call  TAU_PROFILE_SET_NODE(0)"
-    - "#endif"
-
+    - |-
+      ! SALT-FM injected TAU instrumentation
+            integer, save :: tauProfileTimer(2) = [0, 0]
+            call TAU_PROFILE_INIT()
+            call TAU_PROFILE_TIMER(tauProfileTimer, "${full_timer_name}&
+           &")
+            call TAU_PROFILE_START(tauProfileTimer)
+      #ifndef TAU_MPI
+            call  TAU_PROFILE_SET_NODE(0)
+      #endif
 
   procedure_begin_insert:
-    - "      integer, save :: tauProfileTimer(2) = [0, 0]"
-    - "      call TAU_PROFILE_TIMER(tauProfileTimer, \"${full_timer_name}&"
-    - "     &\")"
-    - "      call TAU_PROFILE_START(tauProfileTimer)"
+    - |-
+      ! SALT-FM injected TAU instrumentation
+            integer, save :: tauProfileTimer(2) = [0, 0]
+            call TAU_PROFILE_TIMER(tauProfileTimer, "${full_timer_name}&
+           &")
+            call TAU_PROFILE_START(tauProfileTimer)
 
   procedure_end_insert:
-    - "      call TAU_PROFILE_STOP(tauProfileTimer)"
+    - |-
+      ! SALT-FM injected TAU instrumentation
+            call TAU_PROFILE_STOP(tauProfileTimer)
+
+  pure_procedure_begin_insert:
+    - |-
+      ! SALT-FM injected TAU instrumentation
+            call TAU_START("&${full_timer_name}&
+           &")
+
+  pure_procedure_end_insert:
+    - |-
+      ! SALT-FM injected TAU instrumentation
+            call TAU_STOP("${full_timer_name}&
+           &")
