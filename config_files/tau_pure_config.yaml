@@ -31,6 +31,15 @@ Fortran:
   # Editors might complain about the indentation, but it is correct
   program_insert:
     - |-2
+      ! A little fib, worse case the calls to TAU_START and TAU_STOP dropped by optimizer
+            interface
+              pure subroutine TAU_START(timer_name)
+                character(len=*), intent(in) :: timer_name
+              end subroutine TAU_START
+              pure subroutine TAU_STOP(timer_name)
+                character(len=*), intent(in) :: timer_name
+              end subroutine TAU_STOP
+            end interface
             call TAU_START("${full_timer_name}&
            &")
       #ifndef TAU_MPI
@@ -39,6 +48,15 @@ Fortran:
 
   procedure_begin_insert:
     - |-2
+      ! A little fib, worse case the calls to TAU_START and TAU_STOP dropped by optimizer
+            interface
+              pure subroutine TAU_START(timer_name)
+                character(len=*), intent(in) :: timer_name
+              end subroutine TAU_START
+              pure subroutine TAU_STOP(timer_name)
+                character(len=*), intent(in) :: timer_name
+              end subroutine TAU_STOP
+            end interface
             call TAU_START("${full_timer_name}&
            &")
 
@@ -49,7 +67,16 @@ Fortran:
 
   pure_procedure_begin_insert:
     - |-2
-            call TAU_START("&${full_timer_name}&
+      ! A little fib, worse case the calls to TAU_START and TAU_STOP dropped by optimizer
+            interface
+              pure subroutine TAU_START(timer_name)
+                character(len=*), intent(in) :: timer_name
+              end subroutine TAU_START
+              pure subroutine TAU_STOP(timer_name)
+                character(len=*), intent(in) :: timer_name
+              end subroutine TAU_STOP
+            end interface
+            call TAU_START("${full_timer_name}&
            &")
 
   pure_procedure_end_insert:
