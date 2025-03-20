@@ -15,9 +15,21 @@ main_insert:
   - "#endif /* TAU_MPI */"
   - "    TAU_PROFILE_START(tautimer);"
 
+main_insert_scope:
+  - "    TAU_INIT(&argc, &argv);"
+  - "#ifndef TAU_MPI"
+  - "#ifndef TAU_SHMEM"
+  - "    TAU_PROFILE_SET_NODE(0);"
+  - "#endif /* TAU_SHMEM */"
+  - "#endif /* TAU_MPI */"
+  - "    TAU_PROFILE(\"${full_timer_name}\", \" \", TAU_DEFAULT);"
+
 function_begin_insert:
   - "    TAU_PROFILE_TIMER(tautimer, \"${full_timer_name}\", \" \", TAU_USER);"
   - "    TAU_PROFILE_START(tautimer);"
+
+function_begin_insert_scope:
+  - "    TAU_PROFILE(\"${full_timer_name}\", \" \", TAU_USER);"
 
 function_end_insert:
   - "TAU_PROFILE_STOP(tautimer);"

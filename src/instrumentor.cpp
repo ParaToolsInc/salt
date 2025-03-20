@@ -141,7 +141,7 @@ std::string ReplacePhrase(std::string str, std::string phrase, std::string to_re
     return str;
 }
 
-void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree)
+void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree, const bool use_cxx_api=false)
 {
     /* dump the location */
     /* dump_inst_loc(loc); */
@@ -150,7 +150,7 @@ void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree
         if (strcmp(loc->func_name, "main") == 0 )
         {
             // Insert on main function
-            for (ryml::NodeRef const& child : yaml_tree["main_insert"].children()) 
+            for (ryml::NodeRef const& child : yaml_tree[use_cxx_api ? "main_insert_scope" : "main_insert"].children())
             {
                 std::stringstream ss;
                 ss << child.val();
@@ -167,7 +167,7 @@ void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree
         else
         {
             // Insert on function begin insert
-            for (ryml::NodeRef const& child : yaml_tree["function_begin_insert"].children()) 
+            for (ryml::NodeRef const& child : yaml_tree[use_cxx_api ? "function_begin_insert_scope" : "function_begin_insert"].children())
             {
                 std::stringstream ss;
                 ss << child.val();
@@ -176,26 +176,6 @@ void make_begin_func_code(inst_loc *loc, std::string &code, ryml::Tree yaml_tree
                 code += updated_str + "\n";
             }
         }
-    }
-}
-
-void make_begin_func_code_cxx(inst_loc *loc, std::string &code)
-{
-    if (!loc->skip)
-    {
-        code += "\tTAU_PROFILE(\"";
-        code += loc->full_timer_name;
-        code += "\", \" \", ";
-        code += strcmp(loc->func_name, "main") == 0 ? "TAU_DEFAULT" : "TAU_USER";
-        code += ");\n";
-        if (strcmp(loc->func_name, "main") == 0 && loc->has_args)
-        {
-            code += "\tTAU_INIT(&argc, &argv);\n";
-        }
-    }
-    else
-    {
-        code = "";
     }
 }
 
@@ -860,14 +840,7 @@ void instrumentor::instrument_file(std::ifstream &og_file, std::ofstream &inst_f
                     {
                     case BEGIN_FUNC:
                         inst_file << "\n#line " << lineno << "\n";
-                        if (use_cxx_api)
-                        {
-                            make_begin_func_code_cxx(curr_inst_loc, inst_code);
-                        }
-                        else
-                        {
-                            make_begin_func_code(curr_inst_loc, inst_code, yaml_tree);
-                        }
+                        make_begin_func_code(curr_inst_loc, inst_code, yaml_tree, use_cxx_api);
                         inst_file << inst_code;
                         inst_file << "#line " << lineno << "\n";
                         break;
@@ -1054,6 +1027,19 @@ void instrumentor::instrument()
             llvm::outs() << "No config file found\n";
             remove(newname.c_str());
             exit(1);
+        }
+
+        // If using C++ API, check that config file contains code for scoped instrumentation
+        if (use_cxx_api) {
+            if (ryml::ConstNodeRef mainInsertScope = yaml_tree["main_insert_scope"]; mainInsertScope.invalid()) {
+               llvm::errs() << "Using C++ Instrumentation API requires `main_insert_scope` in config file.\n";
+                exit(2);
+            }
+            if (ryml::ConstNodeRef functionBeginScope = yaml_tree["function_begin_insert_scope"]; functionBeginScope.
+                invalid()) {
+                llvm::errs() << "Using C++ Instrumentation API requires `function_begin_insert_scope` in config file.\n";
+                exit(2);
+            }
         }
 
         llvm::outs() << "Instrumentation: " << yaml_tree["instrumentation"].val() << "\n"; 
