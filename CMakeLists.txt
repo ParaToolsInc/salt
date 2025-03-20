@@ -2,9 +2,9 @@
 # Generic CMake settings for SALT
 #--------------------------------
 
-cmake_minimum_required(VERSION 3.13.1)
+cmake_minimum_required(VERSION 3.23.0)
 # Ensure policies are set as they have been tested
-cmake_policy(VERSION 3.13.1...3.31.2)
+cmake_policy(VERSION 3.23.0...3.31.2)
 if(POLICY CMP0144)
   cmake_policy(SET CMP0144 NEW)
 endif()
