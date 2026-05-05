@@ -736,6 +736,17 @@ if(TEST_FORTRAN)
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran};${_sif_excluded_pattern_fortran}"
   )
+
+  # Combined INCLUDE + EXCLUDE: per the TAU SIF spec the exclude list
+  # operates on whatever survives the include filter. The SIF below
+  # whitelists "#routine" (matches both subprograms) and then explicitly
+  # excludes excluded_routine. Only keep_routine should retain its timer.
+  add_sif_test(include_wildcard_exclude_specific_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_wildcard_exclude_specific_f90.tau F90)
+  set_tests_properties(check_sif_include_wildcard_exclude_specific_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
+    FAIL_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
+  )
 endif()
 
 set(compilers_to_test gcc clang)
