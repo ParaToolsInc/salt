@@ -1,0 +1,4 @@
+# See file_include_match_c.tau. Whitelists this test's C++ source.
+BEGIN_FILE_INCLUDE_LIST
+sif_excl.cpp
+END_FILE_INCLUDE_LIST

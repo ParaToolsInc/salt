@@ -1,5 +1,0 @@
-# See file_include_off_c.tau. Pattern intentionally does not match the source
-# file under test, exercising the negative path of FILE_INCLUDE_LIST.
-BEGIN_FILE_INCLUDE_LIST
-no_such_source_zzzzz.cpp
-END_FILE_INCLUDE_LIST

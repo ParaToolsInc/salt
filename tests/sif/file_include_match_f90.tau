@@ -1,0 +1,4 @@
+# See file_include_match_c.tau. Whitelists this test's Fortran source.
+BEGIN_FILE_INCLUDE_LIST
+sif_excl.f90
+END_FILE_INCLUDE_LIST

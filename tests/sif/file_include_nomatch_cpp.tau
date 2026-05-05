@@ -1,0 +1,5 @@
+# See file_include_nomatch_c.tau. Whitelists a real but unrelated C++ file
+# (tests/c11test.cpp) so that tests/sif_excl.cpp is not in the include list.
+BEGIN_FILE_INCLUDE_LIST
+c11test.cpp
+END_FILE_INCLUDE_LIST

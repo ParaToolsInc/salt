@@ -1,0 +1,7 @@
+# SIF: whitelist a real but unrelated source. The test invokes the
+# instrumentor on tests/sif_excl.c, which is NOT on this list, so no
+# instrumented output should be emitted. Pairs with the match sibling to
+# cover both branches of FILE_INCLUDE_LIST.
+BEGIN_FILE_INCLUDE_LIST
+hello.c
+END_FILE_INCLUDE_LIST

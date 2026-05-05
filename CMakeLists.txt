@@ -637,14 +637,29 @@ foreach(L c cpp)
   )
 endforeach()
 
-# File-level EXCLUDE_LIST and FILE_INCLUDE_LIST (negative): the C/C++
-# frontend skips emitting a .inst output entirely when the source file is
-# excluded by the file-level lists. Verify via absence of the
-# "Instrumentation:" banner from cparse-llvm.
-add_sif_test_no_output(file_exclude_c       c   tests/sif_excl.c   tests/sif/file_exclude_c.tau)
-add_sif_test_no_output(file_exclude_cpp     cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau)
-add_sif_test_no_output(file_include_off_c   c   tests/sif_excl.c   tests/sif/file_include_off_c.tau)
-add_sif_test_no_output(file_include_off_cpp cpp tests/sif_excl.cpp tests/sif/file_include_off_cpp.tau)
+# File-level EXCLUDE_LIST: the C/C++ frontend short-circuits and emits no
+# .inst output at all when the source file is on the file exclude list.
+# Verified via absence of the "Instrumentation:" banner from cparse-llvm.
+add_sif_test_no_output(file_exclude_c   c   tests/sif_excl.c   tests/sif/file_exclude_c.tau)
+add_sif_test_no_output(file_exclude_cpp cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau)
+
+# FILE_INCLUDE_LIST: cover both branches of the whitelist gate.
+# - match: source IS on the list, so instrumentation proceeds and
+#   keep_routine appears in the output.
+# - nomatch: list contains a real but unrelated file, so the source under
+#   test is not whitelisted and no .inst output is emitted (C/C++).
+# Together these protect against both "list silently ignored" and
+# "match condition silently over-broad" parser regressions.
+add_sif_test(file_include_match_c   c   tests/sif_excl.c   tests/sif/file_include_match_c.tau   c)
+add_sif_test(file_include_match_cpp cpp tests/sif_excl.cpp tests/sif/file_include_match_cpp.tau cpp)
+foreach(L c cpp)
+  set_tests_properties(check_sif_file_include_match_${L}
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_${L}}"
+  )
+endforeach()
+add_sif_test_no_output(file_include_nomatch_c   c   tests/sif_excl.c   tests/sif/file_include_nomatch_c.tau)
+add_sif_test_no_output(file_include_nomatch_cpp cpp tests/sif_excl.cpp tests/sif/file_include_nomatch_cpp.tau)
 
 if(TEST_FORTRAN)
   add_sif_test(exclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau F90)
@@ -667,13 +682,21 @@ if(TEST_FORTRAN)
   )
 
   add_sif_test(file_exclude_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_f90.tau F90)
-  add_sif_test(file_include_off_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_off_f90.tau F90)
-  foreach(N file_exclude_fortran file_include_off_fortran)
-    set_tests_properties(check_sif_${N}
-      PROPERTIES
-      FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
-    )
-  endforeach()
+  set_tests_properties(check_sif_file_exclude_fortran
+    PROPERTIES
+    FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
+  )
+
+  add_sif_test(file_include_match_fortran   fortran tests/fortran/sif_excl.f90 tests/sif/file_include_match_f90.tau   F90)
+  set_tests_properties(check_sif_file_include_match_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
+  )
+  add_sif_test(file_include_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_nomatch_f90.tau F90)
+  set_tests_properties(check_sif_file_include_nomatch_fortran
+    PROPERTIES
+    FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
+  )
 endif()
 
 set(compilers_to_test gcc clang)
