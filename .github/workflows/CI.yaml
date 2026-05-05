@@ -24,7 +24,7 @@ jobs:
             echo "Working directory contents:"
             ls -la
       - name: Configure SALT
-        run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
+        run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSALT_REQUIRE_TAU=ON -Wdev -Wdeprecated -G Ninja -S . -B build
       - name: Compile SALT
         id: build
         run: |
@@ -44,10 +44,10 @@ jobs:
       - name: Run Tests
         working-directory: build
         run: |
-          if ! ctest -j --output-on-failure ; then
+          if ! ctest --no-tests=error -j --output-on-failure ; then
             echo "::error::Tests failed, re-running tests with verbose output"
             echo "Tests failed, re-running tests with verbose output"
-            if ! ctest --rerun-failed --verbose ; then
+            if ! ctest --no-tests=error --rerun-failed --verbose ; then
               echo "Rerunning failed tests failed on second attempt"
               echo "::error::Rerunning failed tests failed on second attempt"
             fi
