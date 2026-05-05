@@ -564,12 +564,13 @@ endforeach()
 #
 # Each test passes --tau_output so parallel ctest invocations don't clobber a
 # shared default output path (saltfm writes to <basename>.inst.<ext> by default).
-function(add_sif_test test_name lang src sif inst_ext)
+function(add_sif_test test_name lang src sif)
   # Standard SIF test: instrumented output IS produced and inspected by
   # check_sif_<test_name>. The caller is responsible for setting
   # PASS_REGULAR_EXPRESSION / FAIL_REGULAR_EXPRESSION on the check test.
   set(name sif_${test_name})
-  set(out_file ${name}.inst.${inst_ext})
+  get_filename_component(_src_ext ${src} EXT)
+  set(out_file ${name}.inst${_src_ext})
   add_test(NAME instrument_${name}
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
             --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
@@ -596,7 +597,7 @@ function(add_sif_test test_name lang src sif inst_ext)
   )
 endfunction()
 
-function(add_sif_test_no_output test_name lang src sif inst_ext)
+function(add_sif_test_no_output test_name lang src sif)
   # SIF test where the instrumentor is expected NOT to emit instrumented
   # code (e.g. the source is on a FILE_EXCLUDE_LIST or fails the
   # FILE_INCLUDE_LIST whitelist). Verified by the absence of cparse-llvm's
@@ -607,7 +608,8 @@ function(add_sif_test_no_output test_name lang src sif inst_ext)
   # path via its files_skipped pass. Pass --tau_output to a per-test unique
   # path so parallel ctest runs cannot race on a shared default location.
   set(name sif_${test_name})
-  set(out_file ${name}.inst.${inst_ext})
+  get_filename_component(_src_ext ${src} EXT)
+  set(out_file ${name}.inst${_src_ext})
   add_test(NAME instrument_${name}
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
             --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
@@ -634,8 +636,8 @@ set(_sif_excluded_pattern_c "excluded_routine[(]void[)] +\\[\\{")
 set(_sif_excluded_pattern_cpp "${_sif_excluded_pattern_c}")
 
 # Routine-level EXCLUDE_LIST: blacklist excluded_routine.
-add_sif_test(exclusion_c   c       tests/sif_excl.c   tests/sif/exclude_c.tau   c)
-add_sif_test(exclusion_cpp cpp     tests/sif_excl.cpp tests/sif/exclude_cpp.tau cpp)
+add_sif_test(exclusion_c   c   tests/sif_excl.c   tests/sif/exclude_c.tau)
+add_sif_test(exclusion_cpp cpp tests/sif_excl.cpp tests/sif/exclude_cpp.tau)
 foreach(L c cpp)
   set_tests_properties(check_sif_exclusion_${L}
     PROPERTIES
@@ -647,8 +649,8 @@ endforeach()
 # File-level EXCLUDE_LIST: the C/C++ frontend short-circuits and emits no
 # .inst output at all when the source file is on the file exclude list.
 # Verified via absence of the "Instrumentation:" banner from cparse-llvm.
-add_sif_test_no_output(file_exclude_c   c   tests/sif_excl.c   tests/sif/file_exclude_c.tau   c)
-add_sif_test_no_output(file_exclude_cpp cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau cpp)
+add_sif_test_no_output(file_exclude_c   c   tests/sif_excl.c   tests/sif/file_exclude_c.tau)
+add_sif_test_no_output(file_exclude_cpp cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau)
 
 # FILE_INCLUDE_LIST: cover both branches of the whitelist gate.
 # - match: source IS on the list, so instrumentation proceeds and
@@ -657,19 +659,19 @@ add_sif_test_no_output(file_exclude_cpp cpp tests/sif_excl.cpp tests/sif/file_ex
 #   test is not whitelisted and no .inst output is emitted (C/C++).
 # Together these protect against both "list silently ignored" and
 # "match condition silently over-broad" parser regressions.
-add_sif_test(file_include_match_c   c   tests/sif_excl.c   tests/sif/file_include_match_c.tau   c)
-add_sif_test(file_include_match_cpp cpp tests/sif_excl.cpp tests/sif/file_include_match_cpp.tau cpp)
+add_sif_test(file_include_match_c   c   tests/sif_excl.c   tests/sif/file_include_match_c.tau)
+add_sif_test(file_include_match_cpp cpp tests/sif_excl.cpp tests/sif/file_include_match_cpp.tau)
 foreach(L c cpp)
   set_tests_properties(check_sif_file_include_match_${L}
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_${L}}"
   )
 endforeach()
-add_sif_test_no_output(file_include_nomatch_c   c   tests/sif_excl.c   tests/sif/file_include_nomatch_c.tau   c)
-add_sif_test_no_output(file_include_nomatch_cpp cpp tests/sif_excl.cpp tests/sif/file_include_nomatch_cpp.tau cpp)
+add_sif_test_no_output(file_include_nomatch_c   c   tests/sif_excl.c   tests/sif/file_include_nomatch_c.tau)
+add_sif_test_no_output(file_include_nomatch_cpp cpp tests/sif_excl.cpp tests/sif/file_include_nomatch_cpp.tau)
 
 if(TEST_FORTRAN)
-  add_sif_test(exclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau F90)
+  add_sif_test(exclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau)
   set_tests_properties(check_sif_exclusion_fortran
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
@@ -681,25 +683,25 @@ if(TEST_FORTRAN)
   # NOTE: this whitelist semantics only applies to Fortran. The C/C++ frontend
   # consults includelist exclusively to opt inline functions in to
   # instrumentation, not as a global routine whitelist.
-  add_sif_test(inclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_routine_f90.tau F90)
+  add_sif_test(inclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_routine_f90.tau)
   set_tests_properties(check_sif_inclusion_fortran
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
     FAIL_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
   )
 
-  add_sif_test(file_exclude_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_f90.tau F90)
+  add_sif_test(file_exclude_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_f90.tau)
   set_tests_properties(check_sif_file_exclude_fortran
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
   )
 
-  add_sif_test(file_include_match_fortran   fortran tests/fortran/sif_excl.f90 tests/sif/file_include_match_f90.tau   F90)
+  add_sif_test(file_include_match_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_match_f90.tau)
   set_tests_properties(check_sif_file_include_match_fortran
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
   )
-  add_sif_test(file_include_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_nomatch_f90.tau F90)
+  add_sif_test(file_include_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_nomatch_f90.tau)
   set_tests_properties(check_sif_file_include_nomatch_fortran
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
@@ -713,7 +715,7 @@ if(TEST_FORTRAN)
   # A SIF entry that is only a substring of subprogram names must NOT
   # exclude them. Both keep_routine and excluded_routine should remain
   # instrumented after applying the SIF.
-  add_sif_test(routine_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_substring_routine_f90.tau F90)
+  add_sif_test(routine_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_substring_routine_f90.tau)
   set_tests_properties(check_sif_routine_substring_nomatch_fortran
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
@@ -721,7 +723,7 @@ if(TEST_FORTRAN)
 
   # A FILE_EXCLUDE entry that is only a substring of the source basename
   # must NOT exclude the file. Subprogram timers must still be emitted.
-  add_sif_test(file_exclude_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_substring_f90.tau F90)
+  add_sif_test(file_exclude_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_substring_f90.tau)
   set_tests_properties(check_sif_file_exclude_substring_nomatch_fortran
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
@@ -729,7 +731,7 @@ if(TEST_FORTRAN)
 
   # A FILE_INCLUDE entry that is only a substring of the source basename
   # must NOT whitelist the file, so no TAU timers should appear.
-  add_sif_test(file_include_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_substring_f90.tau F90)
+  add_sif_test(file_include_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_substring_f90.tau)
   set_tests_properties(check_sif_file_include_substring_nomatch_fortran
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
@@ -738,7 +740,7 @@ if(TEST_FORTRAN)
   # Wildcard sanity check: a "#" kleene-star pattern must still match the
   # subprograms whose suffix it captures, so neither keep_routine nor
   # excluded_routine should appear with a TAU timer (only main remains).
-  add_sif_test(routine_wildcard_excludes_both_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_wildcard_routine_f90.tau F90)
+  add_sif_test(routine_wildcard_excludes_both_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_wildcard_routine_f90.tau)
   set_tests_properties(check_sif_routine_wildcard_excludes_both_fortran
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran};${_sif_excluded_pattern_fortran}"
@@ -748,7 +750,7 @@ if(TEST_FORTRAN)
   # operates on whatever survives the include filter. The SIF below
   # whitelists "#routine" (matches both subprograms) and then explicitly
   # excludes excluded_routine. Only keep_routine should retain its timer.
-  add_sif_test(include_wildcard_exclude_specific_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_wildcard_exclude_specific_f90.tau F90)
+  add_sif_test(include_wildcard_exclude_specific_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_wildcard_exclude_specific_f90.tau)
   set_tests_properties(check_sif_include_wildcard_exclude_specific_fortran
     PROPERTIES
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
