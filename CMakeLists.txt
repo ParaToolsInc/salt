@@ -42,11 +42,11 @@ if(NOT isMultiConfig)
 endif()
 
 # Only treat warnings as errors in Debug builds. Release builds tolerate new
-# warnings introduced by newer compiler versions.
-set(SALT_WERROR "")
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(SALT_WERROR "-Werror")
-endif()
+# warnings introduced by newer compiler versions. Use a generator expression
+# so multi-config generators (Visual Studio, Xcode, Ninja Multi-Config) honor
+# the policy per-configuration -- a configure-time CMAKE_BUILD_TYPE check
+# would be empty under those generators and silently drop -Werror.
+set(SALT_WERROR "$<$<CONFIG:Debug>:-Werror>")
 
 
 #------------------------------------------------------------
@@ -596,15 +596,22 @@ function(add_sif_test test_name lang src sif inst_ext)
   )
 endfunction()
 
-function(add_sif_test_no_output test_name lang src sif)
-  # SIF test where the instrumentor is expected NOT to emit a transformed
-  # file (e.g. the C/C++ frontend skips all output when the source is on a
-  # FILE_EXCLUDE_LIST or fails the FILE_INCLUDE_LIST whitelist). Verified by
-  # the absence of cparse-llvm's "Instrumentation:" banner and a clean exit.
+function(add_sif_test_no_output test_name lang src sif inst_ext)
+  # SIF test where the instrumentor is expected NOT to emit instrumented
+  # code (e.g. the source is on a FILE_EXCLUDE_LIST or fails the
+  # FILE_INCLUDE_LIST whitelist). Verified by the absence of cparse-llvm's
+  # "Instrumentation:" banner.
+  #
+  # Even though no instrumented output is expected to be useful, cparse-llvm
+  # may still copy the original source to the default <basename>.inst.<ext>
+  # path via its files_skipped pass. Pass --tau_output to a per-test unique
+  # path so parallel ctest runs cannot race on a shared default location.
   set(name sif_${test_name})
+  set(out_file ${name}.inst.${inst_ext})
   add_test(NAME instrument_${name}
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
             --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
+            --tau_output=${out_file}
             ${CMAKE_SOURCE_DIR}/${src}
   )
   set_tests_properties(instrument_${name}
@@ -640,8 +647,8 @@ endforeach()
 # File-level EXCLUDE_LIST: the C/C++ frontend short-circuits and emits no
 # .inst output at all when the source file is on the file exclude list.
 # Verified via absence of the "Instrumentation:" banner from cparse-llvm.
-add_sif_test_no_output(file_exclude_c   c   tests/sif_excl.c   tests/sif/file_exclude_c.tau)
-add_sif_test_no_output(file_exclude_cpp cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau)
+add_sif_test_no_output(file_exclude_c   c   tests/sif_excl.c   tests/sif/file_exclude_c.tau   c)
+add_sif_test_no_output(file_exclude_cpp cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau cpp)
 
 # FILE_INCLUDE_LIST: cover both branches of the whitelist gate.
 # - match: source IS on the list, so instrumentation proceeds and
@@ -658,8 +665,8 @@ foreach(L c cpp)
     PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_${L}}"
   )
 endforeach()
-add_sif_test_no_output(file_include_nomatch_c   c   tests/sif_excl.c   tests/sif/file_include_nomatch_c.tau)
-add_sif_test_no_output(file_include_nomatch_cpp cpp tests/sif_excl.cpp tests/sif/file_include_nomatch_cpp.tau)
+add_sif_test_no_output(file_include_nomatch_c   c   tests/sif_excl.c   tests/sif/file_include_nomatch_c.tau   c)
+add_sif_test_no_output(file_include_nomatch_cpp cpp tests/sif_excl.cpp tests/sif/file_include_nomatch_cpp.tau cpp)
 
 if(TEST_FORTRAN)
   add_sif_test(exclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau F90)
