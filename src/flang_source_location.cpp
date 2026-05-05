@@ -66,6 +66,9 @@ limitations under the License.
             },
             [&](const Fortran::parser::OpenMPAtomicConstruct &c) -> std::optional<
         Fortran::parser::SourcePosition> {
+#if LLVM_VERSION_MAJOR >= 21
+                return locationFromSource(parsing, c.source, end);
+#else
                 return std::visit(
                     [&](const auto &o) -> std::optional<Fortran::parser::SourcePosition> {
                         const Fortran::parser::CharBlock &source{
@@ -74,6 +77,7 @@ limitations under the License.
                         return locationFromSource(parsing, source, end);
                     },
                     c.u);
+#endif
             },
             [&](const Fortran::parser::OpenMPSectionConstruct &c) -> std::optional<
         Fortran::parser::SourcePosition> {
