@@ -38,11 +38,15 @@ limitations under the License.
     const bool end) {
     // This function is based on the equivalent function in
     // flang/examples/FlangOmpReport/FlangOmpReportVisitor.cpp
+#if LLVM_VERSION_MAJOR >= 22
+    return locationFromSource(parsing, construct.source, end);
+#else
     return std::visit(
         [&](const auto &o) -> std::optional<Fortran::parser::SourcePosition> {
             return locationFromSource(parsing, o.source, end);
         },
         construct.u);
+#endif
 }
 
 [[nodiscard]] std::optional<Fortran::parser::SourcePosition> salt::fortran::getLocation(
@@ -159,6 +163,16 @@ limitations under the License.
             [&](const auto &c) -> std::optional<Fortran::parser::SourcePosition> {
                 return locationFromSource(parsing, c.source, end);
             },
+#if LLVM_VERSION_MAJOR >= 22
+            [&](const Fortran::common::Indirection<Fortran::parser::OpenMPMisplacedEndDirective> &c) ->
+        std::optional<Fortran::parser::SourcePosition> {
+                return locationFromSource(parsing, c.value().source, end);
+            },
+            [&](const Fortran::common::Indirection<Fortran::parser::OpenMPInvalidDirective> &c) ->
+        std::optional<Fortran::parser::SourcePosition> {
+                return locationFromSource(parsing, c.value().source, end);
+            },
+#endif
             [&](const Fortran::common::Indirection<Fortran::parser::CUFKernelDoConstruct> &c) ->
         std::optional<Fortran::parser::SourcePosition> {
                 if (end) {
