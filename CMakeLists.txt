@@ -417,7 +417,7 @@ if(TAU_EXEC)
   message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
 
   find_file(TAU_CLANG_MAKEFILE
-    NAMES Makefile.tau-clang-pthread
+    NAMES Makefile.tau-clang-pthread-pdt
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
     REQUIRED
   )
@@ -450,7 +450,7 @@ endif()
 # 2. Tests are currently not using MPI
 # 3. Only pthread threading is assumed
 # 4. TAU is installed with the following configuratins:
-#    - Makefile.tau-clang-pthread
+#    - Makefile.tau-clang-pthread-pdt
 #    - Makefile.tau-pthread-pdt
 
 # Care has been taken to break test inter-dependencies where possible and
