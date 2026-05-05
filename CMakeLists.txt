@@ -418,8 +418,14 @@ find_program(TAU_EXEC tau_exec
   PATHS ${TAU_ROOT}/x86_64 ${TAU_ROOT}/apple ${TAU_ROOT}/craycnl
   PATH_SUFFIXES bin
 )
+# Hardening switch: when ON, configure fails if TAU is present but any
+# required artifact is missing. Default OFF so end-user installs degrade
+# gracefully (HAVE_TAU=FALSE skips TAU-dependent tests). CI sets this ON.
+option(SALT_REQUIRE_TAU
+  "Fail configure if TAU is present but any required artifact is missing"
+  OFF)
+
 if(TAU_EXEC)
-  set(HAVE_TAU TRUE)
   get_filename_component(TAU_ARCH_DIR ${TAU_EXEC} DIRECTORY)
   get_filename_component(TAU_ARCH_DIR ${TAU_ARCH_DIR} DIRECTORY)
   message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
@@ -427,27 +433,44 @@ if(TAU_EXEC)
   find_file(TAU_CLANG_MAKEFILE
     NAMES Makefile.tau-clang-pthread Makefile.tau-clang-pthread-pdt
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
-    REQUIRED
   )
   find_file(TAU_GCC_MAKEFILE
     NAMES Makefile.tau-pthread Makefile.tau-pthread-pdt
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
-    REQUIRED
   )
   find_program(TAUCC tau_cc.sh
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
-    REQUIRED
   )
   find_program(TAUCXX tau_cxx.sh
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
-    REQUIRED
   )
   find_program(TAUF90 tau_f90.sh
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES bin
-    REQUIRED
   )
+
+  set(_salt_tau_missing "")
+  foreach(_v TAU_CLANG_MAKEFILE TAU_GCC_MAKEFILE TAUCC TAUCXX TAUF90)
+    if(NOT ${_v})
+      list(APPEND _salt_tau_missing ${_v})
+    endif()
+  endforeach()
+  if(_salt_tau_missing)
+    set(HAVE_TAU FALSE)
+    set(_msg "TAU found at ${TAU_ROOT} but missing required artifacts: ${_salt_tau_missing}. TAU-dependent tests will be skipped.")
+    if(SALT_REQUIRE_TAU)
+      message(FATAL_ERROR "${_msg} (SALT_REQUIRE_TAU=ON)")
+    else()
+      message(WARNING "${_msg}")
+    endif()
+  else()
+    set(HAVE_TAU TRUE)
+  endif()
+  unset(_salt_tau_missing)
 else()
   set(HAVE_TAU FALSE)
+  if(SALT_REQUIRE_TAU)
+    message(FATAL_ERROR "SALT_REQUIRE_TAU=ON but tau_exec not found under ${TAU_ROOT}")
+  endif()
 endif()
 
 #---------------
