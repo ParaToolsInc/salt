@@ -697,6 +697,45 @@ if(TEST_FORTRAN)
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
   )
+
+  # Regression guards for the Fortran matcher's full-string semantics.
+  # The flang plugin previously used regex_search (substring match), which
+  # caused bare entries like "routine" or "excl" to silently match more
+  # subprograms or files than intended. See issue #47.
+
+  # A SIF entry that is only a substring of subprogram names must NOT
+  # exclude them. Both keep_routine and excluded_routine should remain
+  # instrumented after applying the SIF.
+  add_sif_test(routine_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_substring_routine_f90.tau F90)
+  set_tests_properties(check_sif_routine_substring_nomatch_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
+  )
+
+  # A FILE_EXCLUDE entry that is only a substring of the source basename
+  # must NOT exclude the file. Subprogram timers must still be emitted.
+  add_sif_test(file_exclude_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_substring_f90.tau F90)
+  set_tests_properties(check_sif_file_exclude_substring_nomatch_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
+  )
+
+  # A FILE_INCLUDE entry that is only a substring of the source basename
+  # must NOT whitelist the file, so no TAU timers should appear.
+  add_sif_test(file_include_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_substring_f90.tau F90)
+  set_tests_properties(check_sif_file_include_substring_nomatch_fortran
+    PROPERTIES
+    FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
+  )
+
+  # Wildcard sanity check: a "#" kleene-star pattern must still match the
+  # subprograms whose suffix it captures, so neither keep_routine nor
+  # excluded_routine should appear with a TAU timer (only main remains).
+  add_sif_test(routine_wildcard_excludes_both_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_wildcard_routine_f90.tau F90)
+  set_tests_properties(check_sif_routine_wildcard_excludes_both_fortran
+    PROPERTIES
+    FAIL_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran};${_sif_excluded_pattern_fortran}"
+  )
 endif()
 
 set(compilers_to_test gcc clang)

@@ -141,7 +141,7 @@ namespace salt::fortran {
                 }
 
                 for (const auto &excludeEntry: excludelist) {
-                    if (const std::regex excludeRegex{convertWildcardToRegexForm(excludeEntry)}; std::regex_search(
+                    if (const std::regex excludeRegex{convertWildcardToRegexForm(excludeEntry)}; std::regex_match(
                         subprogramName, excludeRegex)) {
                         return false;
                     }
@@ -149,7 +149,7 @@ namespace salt::fortran {
 
                 bool subprogramInIncludeList{false};
                 for (const auto &includeEntry: includelist) {
-                    if (const std::regex includeRegex{convertWildcardToRegexForm(includeEntry)}; std::regex_search(
+                    if (const std::regex includeRegex{convertWildcardToRegexForm(includeEntry)}; std::regex_match(
                         subprogramName, includeRegex)) {
                         subprogramInIncludeList = true;
                         break;
@@ -599,7 +599,7 @@ namespace salt::fortran {
 
             const auto filePart{filePath.filename()};
             for (const auto &excludeEntry: fileexcludelist) {
-                if (const std::regex excludeRegex{convertGlobToRegexForm(excludeEntry)}; std::regex_search(
+                if (const std::regex excludeRegex{convertGlobToRegexForm(excludeEntry)}; std::regex_match(
                     filePart.string(), excludeRegex)) {
                     return false;
                 }
@@ -607,7 +607,7 @@ namespace salt::fortran {
 
             bool fileInIncludeList{false};
             for (const auto &includeEntry: fileincludelist) {
-                if (const std::regex includeRegex{convertGlobToRegexForm(includeEntry)}; std::regex_search(
+                if (const std::regex includeRegex{convertGlobToRegexForm(includeEntry)}; std::regex_match(
                     filePart.string(), includeRegex)) {
                     fileInIncludeList = true;
                     break;
