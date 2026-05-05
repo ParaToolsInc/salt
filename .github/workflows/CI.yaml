@@ -56,3 +56,12 @@ jobs:
       - name: Fail CI on build failure
         if: ${{ steps.build.outputs.build_status == 'failure' }}
         run: echo "Failing build" ; exit 1
+
+  spack-concretize:
+    name: Validate spack.yaml (concretize only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: spack/setup-spack@v3
+      - name: Concretize spack environment
+        run: spack -e . concretize -f
