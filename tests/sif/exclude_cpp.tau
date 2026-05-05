@@ -1,0 +1,5 @@
+# SIF: exclude excluded_routine from C++ instrumentation.
+# See exclude_c.tau for notes on the wildcard/quoting requirement.
+BEGIN_EXCLUDE_LIST
+"#excluded_routine#"
+END_EXCLUDE_LIST

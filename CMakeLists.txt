@@ -551,6 +551,62 @@ foreach(test_source IN LISTS TESTS_LIST)
   add_instrumentor_test(${test_source})
 endforeach()
 
+# Selective Instrumentation File (SIF) tests.
+#
+# Each test runs the SALT instrumentor against a small source file containing
+# two routines, keep_routine and excluded_routine, with a SIF that excludes
+# only excluded_routine. The check_sif_* test then asserts that the
+# instrumentation timer for keep_routine is present and that no instrumentation
+# timer for excluded_routine was emitted.
+#
+# Timer string format markers:
+#   C/C++: "<return-type> <name>(<params>)  [{<file>}..."
+#   Fortran (continued line): "&<name> [{<file>}..."
+# Matching against "<name>[{" or " <name> [{" reliably distinguishes
+# instrumentation sites from source-level identifiers.
+function(add_sif_exclusion_test lang src sif inst_ext)
+  set(test_name sif_exclusion_${lang})
+  add_test(NAME instrument_${test_name}
+    COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
+            --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
+            ${CMAKE_SOURCE_DIR}/${src}
+  )
+  if(lang STREQUAL "fortran")
+    set(instrument_pass_pattern "SALT Instrumentor Plugin finished")
+  else()
+    set(instrument_pass_pattern "[Ii]nstrumentation:")
+  endif()
+  set_tests_properties(instrument_${test_name}
+    PROPERTIES
+    REQUIRED_FILES "${CMAKE_SOURCE_DIR}/${src};${CMAKE_SOURCE_DIR}/${sif}"
+    ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
+    PASS_REGULAR_EXPRESSION "${instrument_pass_pattern}"
+  )
+  get_filename_component(base ${src} NAME_WE)
+  add_test(NAME check_${test_name}
+    COMMAND ${CMAKE_COMMAND} -E cat ./${base}.inst.${inst_ext}
+  )
+  if(lang STREQUAL "fortran")
+    set(keep_pattern "keep_routine \\[\\{")
+    set(fail_pattern "excluded_routine \\[\\{")
+  else()
+    set(keep_pattern "keep_routine[(]void[)] +\\[\\{")
+    set(fail_pattern "excluded_routine[(]void[)] +\\[\\{")
+  endif()
+  set_tests_properties(check_${test_name}
+    PROPERTIES
+    DEPENDS instrument_${test_name}
+    PASS_REGULAR_EXPRESSION "${keep_pattern}"
+    FAIL_REGULAR_EXPRESSION "${fail_pattern}"
+  )
+endfunction()
+
+add_sif_exclusion_test(c   tests/sif_excl.c   tests/sif/exclude_c.tau   c)
+add_sif_exclusion_test(cpp tests/sif_excl.cpp tests/sif/exclude_cpp.tau cpp)
+if(TEST_FORTRAN)
+  add_sif_exclusion_test(fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau F90)
+endif()
+
 set(compilers_to_test gcc clang)
 foreach(comp IN LISTS compilers_to_test)
   set(lower_comp ${comp})

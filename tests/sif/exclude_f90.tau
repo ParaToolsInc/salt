@@ -1,0 +1,6 @@
+# SIF: exclude excluded_routine from Fortran instrumentation.
+# Fortran matcher uses regex_search against the bare subprogram name,
+# so a plain (unquoted) routine name is sufficient and no wildcard is needed.
+BEGIN_EXCLUDE_LIST
+excluded_routine
+END_EXCLUDE_LIST
