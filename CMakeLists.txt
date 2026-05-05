@@ -41,6 +41,13 @@ if(NOT isMultiConfig)
     STRINGS "${SALT_ALLOWED_BUILD_TYPES}")
 endif()
 
+# Only treat warnings as errors in Debug builds. Release builds tolerate new
+# warnings introduced by newer compiler versions.
+set(SALT_WERROR "")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(SALT_WERROR "-Werror")
+endif()
+
 
 #------------------------------------------------------------
 # SALT project specific global options, version, and defaults
@@ -310,7 +317,8 @@ if(MLIR_FOUND AND Flang_FOUND)
     target_compile_features(SALT_FLANG_FRONTEND INTERFACE cxx_std_17)
     target_include_directories(SALT_FLANG_FRONTEND INTERFACE ${LLVM_INCLUDE_DIRS} ${FLANG_INCLUDE_DIRS})
     target_compile_definitions(SALT_FLANG_FRONTEND INTERFACE ${LLVM_DEFINITIONS_LIST})
-    target_compile_options(SALT_FLANG_FRONTEND INTERFACE ${USE_RTTI} -Wall -Wno-unused-variable -Werror -Wpedantic)
+    target_compile_options(SALT_FLANG_FRONTEND INTERFACE ${USE_RTTI} -Wall -Wno-unused-variable -Wpedantic
+        $<$<CONFIG:Debug>:-Werror>)
 
 # Endianness definitions are required, and Flang does not export a definitions list
     include(TestBigEndian)
@@ -728,13 +736,13 @@ if (TEST_FORTRAN)
         STRING(TOUPPER ${compiler} upper_comp)
         if(${compiler} STREQUAL "gfortran")
           set(mapped_comp GCC)
-          set(EXTRA_FLAGS -cpp -Wpedantic -Wextra -Wno-unused-function -Wno-missing-include-dirs -Werror)
+          set(EXTRA_FLAGS -cpp -Wpedantic -Wextra -Wno-unused-function -Wno-missing-include-dirs ${SALT_WERROR})
         elseif(${compiler} STREQUAL "flang-new")
           set(mapped_comp CLANG)
-          set(EXTRA_FLAGS -Werror)
+          set(EXTRA_FLAGS ${SALT_WERROR})
         elseif(${compiler} STREQUAL "flang")
           set(mapped_comp CLANG)
-          set(EXTRA_FLAGS -Werror)
+          set(EXTRA_FLAGS ${SALT_WERROR})
         else()
           message(FATAL_ERROR "Unknown compiler: ${compiler}")
         endif()
