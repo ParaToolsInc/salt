@@ -16,6 +16,7 @@ limitations under the License.
 #include "flang/Parser/char-block.h"
 #include "flang/Parser/parsing.h"
 #include "flang/Parser/source.h"
+#include "llvm/Config/llvm-config.h"
 
 #include "flang_source_location.hpp"
 
@@ -79,6 +80,12 @@ limitations under the License.
                 const Fortran::parser::CharBlock &source{c.source};
                 return locationFromSource(parsing, source, end);
             },
+#if LLVM_VERSION_MAJOR >= 20
+            [&](const Fortran::parser::OpenMPUtilityConstruct &c) -> std::optional<
+        Fortran::parser::SourcePosition> {
+                return locationFromSource(parsing, c.source, end);
+            },
+#endif
         },
         construct.u);
 }

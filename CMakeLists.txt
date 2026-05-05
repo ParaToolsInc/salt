@@ -417,7 +417,7 @@ if(TAU_EXEC)
   message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
 
   find_file(TAU_CLANG_MAKEFILE
-    NAMES Makefile.tau-clang-pthread
+    NAMES Makefile.tau-clang-pthread Makefile.tau-clang-pthread-pdt
     PATHS ${TAU_ARCH_DIR}  PATH_SUFFIXES lib
     REQUIRED
   )
