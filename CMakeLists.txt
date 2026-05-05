@@ -554,21 +554,26 @@ endforeach()
 # Selective Instrumentation File (SIF) tests.
 #
 # Each test runs the SALT instrumentor against a small source file containing
-# two routines, keep_routine and excluded_routine, with a SIF that excludes
-# only excluded_routine. The check_sif_* test then asserts that the
-# instrumentation timer for keep_routine is present and that no instrumentation
-# timer for excluded_routine was emitted.
+# two routines (keep_routine and excluded_routine) under a SIF that exercises
+# one of the supported list types, then inspects the instrumented output for
+# (or absence of) TAU_PROFILE_TIMER markers.
 #
 # Timer string format markers:
 #   C/C++: "<return-type> <name>(<params>)  [{<file>}..."
 #   Fortran (continued line): "&<name> [{<file>}..."
-# Matching against "<name>[{" or " <name> [{" reliably distinguishes
-# instrumentation sites from source-level identifiers.
-function(add_sif_exclusion_test lang src sif inst_ext)
-  set(test_name sif_exclusion_${lang})
-  add_test(NAME instrument_${test_name}
+#
+# Each test passes --tau_output so parallel ctest invocations don't clobber a
+# shared default output path (saltfm writes to <basename>.inst.<ext> by default).
+function(add_sif_test test_name lang src sif inst_ext)
+  # Standard SIF test: instrumented output IS produced and inspected by
+  # check_sif_<test_name>. The caller is responsible for setting
+  # PASS_REGULAR_EXPRESSION / FAIL_REGULAR_EXPRESSION on the check test.
+  set(name sif_${test_name})
+  set(out_file ${name}.inst.${inst_ext})
+  add_test(NAME instrument_${name}
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
             --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
+            --tau_output=${out_file}
             ${CMAKE_SOURCE_DIR}/${src}
   )
   if(lang STREQUAL "fortran")
@@ -576,35 +581,99 @@ function(add_sif_exclusion_test lang src sif inst_ext)
   else()
     set(instrument_pass_pattern "[Ii]nstrumentation:")
   endif()
-  set_tests_properties(instrument_${test_name}
+  set_tests_properties(instrument_${name}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_SOURCE_DIR}/${src};${CMAKE_SOURCE_DIR}/${sif}"
     ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
     PASS_REGULAR_EXPRESSION "${instrument_pass_pattern}"
   )
-  get_filename_component(base ${src} NAME_WE)
-  add_test(NAME check_${test_name}
-    COMMAND ${CMAKE_COMMAND} -E cat ./${base}.inst.${inst_ext}
+  add_test(NAME check_${name}
+    COMMAND ${CMAKE_COMMAND} -E cat ./${out_file}
   )
-  if(lang STREQUAL "fortran")
-    set(keep_pattern "keep_routine \\[\\{")
-    set(fail_pattern "excluded_routine \\[\\{")
-  else()
-    set(keep_pattern "keep_routine[(]void[)] +\\[\\{")
-    set(fail_pattern "excluded_routine[(]void[)] +\\[\\{")
-  endif()
-  set_tests_properties(check_${test_name}
+  set_tests_properties(check_${name}
     PROPERTIES
-    DEPENDS instrument_${test_name}
-    PASS_REGULAR_EXPRESSION "${keep_pattern}"
-    FAIL_REGULAR_EXPRESSION "${fail_pattern}"
+    DEPENDS instrument_${name}
   )
 endfunction()
 
-add_sif_exclusion_test(c   tests/sif_excl.c   tests/sif/exclude_c.tau   c)
-add_sif_exclusion_test(cpp tests/sif_excl.cpp tests/sif/exclude_cpp.tau cpp)
+function(add_sif_test_no_output test_name lang src sif)
+  # SIF test where the instrumentor is expected NOT to emit a transformed
+  # file (e.g. the C/C++ frontend skips all output when the source is on a
+  # FILE_EXCLUDE_LIST or fails the FILE_INCLUDE_LIST whitelist). Verified by
+  # the absence of cparse-llvm's "Instrumentation:" banner and a clean exit.
+  set(name sif_${test_name})
+  add_test(NAME instrument_${name}
+    COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
+            --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
+            ${CMAKE_SOURCE_DIR}/${src}
+  )
+  set_tests_properties(instrument_${name}
+    PROPERTIES
+    REQUIRED_FILES "${CMAKE_SOURCE_DIR}/${src};${CMAKE_SOURCE_DIR}/${sif}"
+    FAIL_REGULAR_EXPRESSION "Instrumentation:"
+  )
+endfunction()
+
+# Pattern helpers: regex fragments that match a TAU_PROFILE_TIMER timer string
+# referencing a named routine. The C/C++ matcher emits the routine signature
+# inline; the Fortran matcher emits a continuation line with the bare name.
 if(TEST_FORTRAN)
-  add_sif_exclusion_test(fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau F90)
+  set(_sif_keep_pattern_fortran    "keep_routine \\[\\{")
+  set(_sif_excluded_pattern_fortran "excluded_routine \\[\\{")
+endif()
+set(_sif_keep_pattern_c     "keep_routine[(]void[)] +\\[\\{")
+set(_sif_keep_pattern_cpp   "${_sif_keep_pattern_c}")
+set(_sif_excluded_pattern_c "excluded_routine[(]void[)] +\\[\\{")
+set(_sif_excluded_pattern_cpp "${_sif_excluded_pattern_c}")
+
+# Routine-level EXCLUDE_LIST: blacklist excluded_routine.
+add_sif_test(exclusion_c   c       tests/sif_excl.c   tests/sif/exclude_c.tau   c)
+add_sif_test(exclusion_cpp cpp     tests/sif_excl.cpp tests/sif/exclude_cpp.tau cpp)
+foreach(L c cpp)
+  set_tests_properties(check_sif_exclusion_${L}
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_${L}}"
+    FAIL_REGULAR_EXPRESSION "${_sif_excluded_pattern_${L}}"
+  )
+endforeach()
+
+# File-level EXCLUDE_LIST and FILE_INCLUDE_LIST (negative): the C/C++
+# frontend skips emitting a .inst output entirely when the source file is
+# excluded by the file-level lists. Verify via absence of the
+# "Instrumentation:" banner from cparse-llvm.
+add_sif_test_no_output(file_exclude_c       c   tests/sif_excl.c   tests/sif/file_exclude_c.tau)
+add_sif_test_no_output(file_exclude_cpp     cpp tests/sif_excl.cpp tests/sif/file_exclude_cpp.tau)
+add_sif_test_no_output(file_include_off_c   c   tests/sif_excl.c   tests/sif/file_include_off_c.tau)
+add_sif_test_no_output(file_include_off_cpp cpp tests/sif_excl.cpp tests/sif/file_include_off_cpp.tau)
+
+if(TEST_FORTRAN)
+  add_sif_test(exclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/exclude_f90.tau F90)
+  set_tests_properties(check_sif_exclusion_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
+    FAIL_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
+  )
+
+  # Routine-level INCLUDE_LIST (whitelist): only keep_routine should be
+  # instrumented; excluded_routine, omitted from the include list, should not.
+  # NOTE: this whitelist semantics only applies to Fortran. The C/C++ frontend
+  # consults includelist exclusively to opt inline functions in to
+  # instrumentation, not as a global routine whitelist.
+  add_sif_test(inclusion_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_routine_f90.tau F90)
+  set_tests_properties(check_sif_inclusion_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
+    FAIL_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
+  )
+
+  add_sif_test(file_exclude_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_f90.tau F90)
+  add_sif_test(file_include_off_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_off_f90.tau F90)
+  foreach(N file_exclude_fortran file_include_off_fortran)
+    set_tests_properties(check_sif_${N}
+      PROPERTIES
+      FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
+    )
+  endforeach()
 endif()
 
 set(compilers_to_test gcc clang)

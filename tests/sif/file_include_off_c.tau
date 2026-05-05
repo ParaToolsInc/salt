@@ -1,0 +1,6 @@
+# SIF: only files matching this whitelist glob get instrumented. The pattern
+# below is intentionally a no-match so the test source falls outside the
+# include list and receives no TAU_PROFILE_TIMER calls.
+BEGIN_FILE_INCLUDE_LIST
+no_such_source_zzzzz.c
+END_FILE_INCLUDE_LIST

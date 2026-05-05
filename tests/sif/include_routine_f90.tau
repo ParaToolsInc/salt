@@ -1,0 +1,6 @@
+# SIF: routine-level whitelist. Only subprograms whose names match an entry
+# below are instrumented. The Fortran matcher uses std::regex_search against
+# the bare subprogram name, so a plain identifier suffices.
+BEGIN_INCLUDE_LIST
+keep_routine
+END_INCLUDE_LIST

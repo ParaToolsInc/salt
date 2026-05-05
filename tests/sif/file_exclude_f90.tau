@@ -1,0 +1,7 @@
+# SIF: exclude the entire sif_excl.f90 file from instrumentation.
+# Fortran matcher: the entry is treated as a shell glob (`*` -> regex `.*`)
+# and matched against the source file's basename via std::regex_search,
+# so a plain basename matches as a substring.
+BEGIN_FILE_EXCLUDE_LIST
+sif_excl.f90
+END_FILE_EXCLUDE_LIST
