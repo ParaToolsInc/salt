@@ -1008,9 +1008,22 @@ if(TEST_FORTRAN)
     trivial.f90
     return-only.f90
     if-stmt.f90
+    if-stmt-edge.f90
+    if-stmt-continuation.f90
     internal-func.f90
     interface_test.f90
     submodule_test.f90
+  )
+
+  # Tests known to fail on the current plugin implementation. Each
+  # entry must reference an issue tracking the underlying defect; when
+  # the defect is fixed, remove the entry here AND the WILL_FAIL
+  # set_tests_properties block further down.
+  #   if-stmt-continuation.f90 -> issue #39 (multi-line if-return
+  #     condition: plugin TODO, line continuation in
+  #     flang_salt_instrument_plugin.cpp Pre(IfStmt&))
+  set(FORTRAN_TESTS_KNOWN_FAILING_SOURCES
+    if-stmt-continuation.f90
   )
 
   # Add a smoke test of the fparse-llvm script
@@ -1124,6 +1137,22 @@ if(TEST_FORTRAN)
           PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
           FAIL_REGULAR_EXPRESSION "addr=\<0x"
           DEPENDS run_${upper_comp}_${test_source}
+        )
+      endforeach()
+    endforeach()
+
+    # Invert pass/fail for documented-defective sources so CI tracks
+    # the bug without going red. When the plugin defect is fixed, drop
+    # both the source from FORTRAN_TESTS_KNOWN_FAILING_SOURCES and
+    # this block.
+    foreach(test_source IN LISTS FORTRAN_TESTS_KNOWN_FAILING_SOURCES)
+      foreach(compiler IN LISTS SALT_FORTRAN_COMPILERS_TO_TEST)
+        string(TOUPPER ${compiler} upper_comp)
+        set_tests_properties(
+          compile_${upper_comp}_${test_source}
+          run_${upper_comp}_${test_source}
+          check_${upper_comp}_${test_source}_profile
+          PROPERTIES WILL_FAIL TRUE
         )
       endforeach()
     endforeach()
