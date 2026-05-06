@@ -915,7 +915,7 @@ if(HAVE_TAU)
       # Test to actually instrument and build the test source using TAU
       # compiler wrappers & salt parser.
       add_test(NAME compile_${lower_comp}_${test_name}
-        COMMAND ${tauc} ${tauc_opts} ${compiler_opts}
+        COMMAND ${tauc} ${tauc_opts} ${compile_opts}
           -o ${test_base_name}.${lower_comp} ${test_path}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
       )
