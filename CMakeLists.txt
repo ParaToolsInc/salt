@@ -1010,6 +1010,7 @@ if(TEST_FORTRAN)
     if-stmt.f90
     internal-func.f90
     interface_test.f90
+    submodule_test.f90
   )
 
   # Add a smoke test of the fparse-llvm script

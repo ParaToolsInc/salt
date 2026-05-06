@@ -31,6 +31,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman, closes
   [#44](https://github.com/ParaToolsInc/salt/issues/44) reported by
   @nchaimov).
+- Regression test for Fortran 2008 submodule instrumentation, confirming
+  that TAU calls land in submodule procedure bodies and that the parent
+  module's bodyless interface declarations remain untouched
+  ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman, closes
+  [#33](https://github.com/ParaToolsInc/salt/issues/33)).
 - Project version is now derived from a committed `.VERSION` file plus
   `git describe` build metadata, replacing hardcoded version constants
   that had drifted to `0.2` after v0.3.0 shipped. A vendored `.githooks/`
