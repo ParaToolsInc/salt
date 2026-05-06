@@ -94,7 +94,7 @@ set(CMAKE_CXX_STANDARD 17)
 #-----------------------------
 project(saltfm
   VERSION "${SALT_VERSION_BASE}"
-  DESCRIPTION "An LLVM-based Source Analysis Tookit for HPC"
+  DESCRIPTION "An LLVM-based Source Analysis Toolkit for HPC"
   HOMEPAGE_URL "https://github.com/ParaToolsInc/salt"
   LANGUAGES CXX C)
 
@@ -235,7 +235,7 @@ list(TRANSFORM CPARSE_LLVM_SRCS PREPEND "${CMAKE_SOURCE_DIR}/src/")
 # Add the main targets
 #---------------------
 # If we refactor into a library that executables link against it will simplify
-# this and reduce repitition
+# this and reduce repetition
 add_executable(cparse-llvm)
 target_sources(cparse-llvm PUBLIC ${CPARSE_LLVM_SRCS})
 target_sources(cparse-llvm
