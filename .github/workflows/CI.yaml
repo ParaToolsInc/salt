@@ -2,11 +2,22 @@ name: CI
 on: push
 jobs:
   build:
+    name: build (llvm-${{ matrix.llvm }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - llvm: 19
+            image: ghcr.io/paratoolsinc/salt-dev:1.3
+          - llvm: 20
+            image: ghcr.io/paratoolsinc/salt-dev:1.4
+          - llvm: 21
+            image: ghcr.io/paratoolsinc/salt-dev:1.5
     container:
-      image: ghcr.io/paratoolsinc/salt-dev:1.3
+      image: ${{ matrix.image }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Print working directory
@@ -15,17 +26,19 @@ jobs:
             echo "Working directory contents:"
             ls -la
       - name: Configure SALT
-        run: cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
+        run: >
+          cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DSALT_REQUIRE_TAU=ON -Wdev -Wdeprecated -G Ninja -S . -B build
       - name: Compile SALT
         id: build
         run: |
-          echo "Cores: $(nproc) "
-          if cmake --build build --parallel $(nproc) ; then
-            echo "build_status=success" >> $GITHUB_OUTPUT
+          echo "Cores: $(nproc)"
+          if cmake --build build --parallel "$(nproc)" ; then
+            echo "build_status=success" >> "$GITHUB_OUTPUT"
           else
-            echo "build_status=failure" >> $GITHUB_OUTPUT
-            echo "::error::Initial build failed, re-attempting build with verbose output but failing CI"
-            echo "Initial build failed, re-attempting build with verbose output but failing CI"
+            echo "build_status=failure" >> "$GITHUB_OUTPUT"
+            echo "::error::Build failed; rerunning verbose, then failing CI"
+            echo "Build failed; rerunning verbose, then failing CI"
             if ! cmake --build build --verbose ; then
               echo "Verbose build failed on second attempt"
               echo "::error::Verbose build failed on second attempt"
@@ -35,10 +48,10 @@ jobs:
       - name: Run Tests
         working-directory: build
         run: |
-          if ! ctest -j --output-on-failure ; then
+          if ! ctest --no-tests=error -j --output-on-failure ; then
             echo "::error::Tests failed, re-running tests with verbose output"
             echo "Tests failed, re-running tests with verbose output"
-            if ! ctest --rerun-failed --verbose ; then
+            if ! ctest --no-tests=error --rerun-failed --verbose ; then
               echo "Rerunning failed tests failed on second attempt"
               echo "::error::Rerunning failed tests failed on second attempt"
             fi
@@ -47,3 +60,12 @@ jobs:
       - name: Fail CI on build failure
         if: ${{ steps.build.outputs.build_status == 'failure' }}
         run: echo "Failing build" ; exit 1
+
+  spack-concretize:
+    name: Validate spack.yaml (concretize only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: spack/setup-spack@v3
+      - name: Concretize spack environment
+        run: spack -e . concretize -f

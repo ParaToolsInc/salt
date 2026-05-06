@@ -1,0 +1,6 @@
+# Substring "excl" must NOT match the basename "sif_excl.f90".
+# With full-string semantics the source falls outside the whitelist and
+# receives no TAU calls.
+BEGIN_FILE_INCLUDE_LIST
+excl
+END_FILE_INCLUDE_LIST

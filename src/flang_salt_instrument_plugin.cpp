@@ -141,7 +141,7 @@ namespace salt::fortran {
                 }
 
                 for (const auto &excludeEntry: excludelist) {
-                    if (const std::regex excludeRegex{convertWildcardToRegexForm(excludeEntry)}; std::regex_search(
+                    if (const std::regex excludeRegex{convertWildcardToRegexForm(excludeEntry)}; std::regex_match(
                         subprogramName, excludeRegex)) {
                         return false;
                     }
@@ -149,7 +149,7 @@ namespace salt::fortran {
 
                 bool subprogramInIncludeList{false};
                 for (const auto &includeEntry: includelist) {
-                    if (const std::regex includeRegex{convertWildcardToRegexForm(includeEntry)}; std::regex_search(
+                    if (const std::regex includeRegex{convertWildcardToRegexForm(includeEntry)}; std::regex_match(
                         subprogramName, includeRegex)) {
                         subprogramInIncludeList = true;
                         break;
@@ -579,11 +579,15 @@ namespace salt::fortran {
             // Convert lines in shell glob format (where "*" means zero or more characters)
             // to regex version (where ".*" means zero or more characters).
             // This is used for files in TAU selective instrumentation files.
-            static std::regex starRegex{R"(\*)"};
-            const std::string starString{std::regex_replace(globString, starRegex, ".*")};
-            // Escape all special regex characters except for "*" which was previously handled.
+            // Order matters: escape regex metacharacters first so any "."
+            // characters in the input become "\\.", then substitute the
+            // surviving literal "*" with ".*". Doing the "*" -> ".*" rewrite
+            // first would let the inserted "." get escaped to "\\.", turning
+            // the wildcard into a quantifier on a literal dot.
             static const std::regex metacharacters(R"([\.\^\$\+\(\)\[\]\{\}\|\?])");
-            return std::regex_replace(starString, metacharacters, R"(\$&)");
+            const std::string escapedString{std::regex_replace(globString, metacharacters, R"(\$&)")};
+            static const std::regex starRegex{R"(\*)"};
+            return std::regex_replace(escapedString, starRegex, ".*");
         }
 
         [[nodiscard]] static bool shouldInstrumentFile(const std::filesystem::path &filePath) {
@@ -599,7 +603,7 @@ namespace salt::fortran {
 
             const auto filePart{filePath.filename()};
             for (const auto &excludeEntry: fileexcludelist) {
-                if (const std::regex excludeRegex{convertGlobToRegexForm(excludeEntry)}; std::regex_search(
+                if (const std::regex excludeRegex{convertGlobToRegexForm(excludeEntry)}; std::regex_match(
                     filePart.string(), excludeRegex)) {
                     return false;
                 }
@@ -607,7 +611,7 @@ namespace salt::fortran {
 
             bool fileInIncludeList{false};
             for (const auto &includeEntry: fileincludelist) {
-                if (const std::regex includeRegex{convertGlobToRegexForm(includeEntry)}; std::regex_search(
+                if (const std::regex includeRegex{convertGlobToRegexForm(includeEntry)}; std::regex_match(
                     filePart.string(), includeRegex)) {
                     fileInIncludeList = true;
                     break;

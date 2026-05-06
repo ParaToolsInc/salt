@@ -1,0 +1,6 @@
+# See file_include_nomatch_c.tau. Whitelists a real but unrelated Fortran
+# file (tests/fortran/hello.f90) so tests/fortran/sif_excl.f90 is not in
+# the include list and should receive no TAU calls.
+BEGIN_FILE_INCLUDE_LIST
+hello.f90
+END_FILE_INCLUDE_LIST

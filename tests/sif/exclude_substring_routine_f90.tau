@@ -1,0 +1,6 @@
+# Substring "routine" must NOT match keep_routine or excluded_routine.
+# Locks in the matcher's full-string semantics: bare entries are exact, not
+# substrings.
+BEGIN_EXCLUDE_LIST
+routine
+END_EXCLUDE_LIST

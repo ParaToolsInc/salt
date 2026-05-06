@@ -1,0 +1,6 @@
+# Wildcard "#routine" should match both keep_routine and excluded_routine
+# (kleene-star # at the front matches the leading prefix).
+# The pattern is quoted because '#' at column 0 is the SIF comment marker.
+BEGIN_EXCLUDE_LIST
+"#routine"
+END_EXCLUDE_LIST

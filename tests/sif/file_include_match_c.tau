@@ -1,0 +1,5 @@
+# SIF: whitelist a glob that DOES match the test source. Pairs with the
+# nomatch sibling to cover both branches of FILE_INCLUDE_LIST.
+BEGIN_FILE_INCLUDE_LIST
+sif_excl.c
+END_FILE_INCLUDE_LIST

@@ -1,0 +1,73 @@
+# Default: let Git auto-detect text files and normalize line endings to LF in
+# the repository. Working-tree EOL follows core.autocrlf / core.eol on checkout.
+* text=auto eol=lf
+
+# Source code — explicit LF (defensive against contributor-side misconfig)
+*.c             text eol=lf
+*.h             text eol=lf
+*.cc            text eol=lf
+*.cpp           text eol=lf
+*.cxx           text eol=lf
+*.hh            text eol=lf
+*.hpp           text eol=lf
+*.hxx           text eol=lf
+*.inc           text eol=lf
+*.in            text eol=lf
+*.f             text eol=lf
+*.F             text eol=lf
+*.f90           text eol=lf
+*.F90           text eol=lf
+*.f03           text eol=lf
+*.F03           text eol=lf
+*.f08           text eol=lf
+*.F08           text eol=lf
+
+# Build / config
+CMakeLists.txt  text eol=lf
+*.cmake         text eol=lf
+*.cmake.in      text eol=lf
+Makefile        text eol=lf
+*.mk            text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.json          text eol=lf
+*.toml          text eol=lf
+
+# Shell / scripts — must stay LF or they break on Linux containers
+*.sh            text eol=lf
+*.bash          text eol=lf
+*.py            text eol=lf
+
+# Docs
+*.md            text eol=lf
+*.txt           text eol=lf
+LICENSE         text eol=lf
+
+# Patches must stay LF; CRLF corrupts `git apply`
+*.patch         text eol=lf
+*.diff          text eol=lf
+
+# Windows-only scripts (none today, but reserve correct EOL if added)
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Binary — never normalize
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.so            binary
+*.dylib         binary
+*.dll           binary
+*.a             binary
+*.o             binary
+*.obj           binary
+*.exe           binary
+*.sif           binary
+*.tar           binary
+*.tar.gz        binary
+*.tgz           binary
+*.zip           binary

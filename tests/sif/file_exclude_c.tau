@@ -1,0 +1,7 @@
+# SIF: exclude the entire sif_excl.c file from instrumentation.
+# C/C++ matcher: with no slash in the pattern, it expands to "(.*/x|x)" and
+# matches the full source path via egrep regex_match, so a bare basename
+# matches any path ending in this file name.
+BEGIN_FILE_EXCLUDE_LIST
+sif_excl.c
+END_FILE_EXCLUDE_LIST

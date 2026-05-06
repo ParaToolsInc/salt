@@ -1,0 +1,5 @@
+# SIF: exclude the entire sif_excl.cpp file from instrumentation.
+# See file_exclude_c.tau for notes on the C/C++ file-name matcher.
+BEGIN_FILE_EXCLUDE_LIST
+sif_excl.cpp
+END_FILE_EXCLUDE_LIST

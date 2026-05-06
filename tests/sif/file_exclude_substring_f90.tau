@@ -1,0 +1,5 @@
+# Substring "excl" must NOT match the basename "sif_excl.f90".
+# Locks in the file matcher's full-string semantics.
+BEGIN_FILE_EXCLUDE_LIST
+excl
+END_FILE_EXCLUDE_LIST

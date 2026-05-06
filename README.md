@@ -1,10 +1,10 @@
 [![CI](https://github.com/ParaToolsInc/salt/actions/workflows/CI.yaml/badge.svg)](https://github.com/ParaToolsInc/salt/actions/workflows/CI.yaml)
 
-SALT: An LLVM-based Source Analysis Tookit for HPC
+SALT: An LLVM-based Source Analysis Toolkit for HPC
 ==================================================
 
 The [TAU Performance System] is a powerful and versatile performance monitoring and analysis system.
-TAU supports several different mechanisms for instrumentation of applications,
+TAU supports several mechanisms for instrumenting applications,
 including source-based instrumentation.
 Source-based instrumentation inserts instrumentation points around areas of interest
 by parsing and modifying an application's source code.
@@ -14,19 +14,27 @@ To improve the usability of TAU,
 we introduce a next-generation source analysis toolkit called SALT.
 SALT is built using LLVM compiler technology,
 including the libTooling library, Clang's C and C++ parsers, and f18/Flang's Fortran parser.
+SALT supports the following LLVM/Clang versions, each tested in CI against a matching [salt-dev] container image.
+The same images are also published to [Docker Hub][salt-dev Docker Hub] under the `paratools/salt-dev` repository.
+
+| LLVM/Clang version | GitHub Container Registry           | Docker Hub                |
+| ------------------ | ----------------------------------- | ------------------------- |
+| 19                 | `ghcr.io/paratoolsinc/salt-dev:1.3` | `paratools/salt-dev:1.3`  |
+| 20                 | `ghcr.io/paratoolsinc/salt-dev:1.4` | `paratools/salt-dev:1.4`  |
+| 21                 | `ghcr.io/paratoolsinc/salt-dev:1.5` | `paratools/salt-dev:1.5`  |
 
 ## Getting Started
 
-The build system for SALT utilizes [CMake] as the build system generator
-(AKA meta build system).
+The build system for SALT uses [CMake] as the build system generator
+(also known as a meta-build system).
 It also requires either a full installation of LLVM and Clang including the
-`clang-cmake-exports` and `cmake-exports`, or a more minimal set of features/components
-(including both of the aformentioned `cmake-exports`) and a patch to be applied to
+`clang-cmake-exports` and `cmake-exports` components, or a more minimal set of features and components
+(including both of the aforementioned `cmake-exports`) together with a patch applied to
 two of the LLVM/Clang installed CMake files.
 
 The development and testing of SALT utilizes the [salt-dev] container,
 which is [posted to Docker Hub].
-The container image includes an installation of `git`, `cmake`, `llvm`/`clang` and `ninja`.
+The container image includes an installation of `git`, `cmake`, `llvm`/`clang`, and `ninja`.
 The installed `llvm` and `clang` include the patched [CMake] files.
 
 Below are the steps required to get started using SALT:
@@ -47,7 +55,7 @@ and you have write access to the LLVM and/or Clang installation,
 applying the patches from https://github.com/ParaToolsInc/salt-llvm-patches
 may fix the problem.
 
-### 2. Fire up the salt-dev docker image (optional)
+### 2. Launch the salt-dev Docker image (optional)
 
 ``` shell
 $ docker pull paratools/salt-dev:latest
@@ -57,7 +65,7 @@ $ docker run -it --pull always --tmpfs=/dev/shm:rw,nosuid,nodev,exec \
 # ccache --show-stats
 ```
 This step is optional but recommended.
-The `llvm`/`clang` cmake files are patched and this is the environment used in CI testing.
+The `llvm`/`clang` CMake files are patched, and this is the environment used in CI testing.
 The docker image also includes `ccache` and two configurations of TAU
 for testing with both GCC and Clang.
 (See `/usr/local/x86_64/lib` for the two installed `TAU_MAKEFILE`s.)
@@ -65,7 +73,7 @@ for testing with both GCC and Clang.
 ### 3. Configure and build SALT:
 
 This step is most easily performed in the [salt-dev] container,
-but can also be performed if a suitable installation of LLVM and Clang are present.
+but can also be performed if a suitable installation of LLVM and Clang is present.
 
 ``` shell
 # Tell CMake to use the clang/clang++ compiler to build SALT
@@ -75,7 +83,7 @@ export CXX=clang++
 cmake -Wdev -Wdeprecated -S . -B build
 cmake --build build --parallel # Add --verbose to debug something going wrong
 ```
-To specify a TAU installation for testing other than the one used by the [salt-dev] container
+To specify a TAU installation for testing other than the one used by the [salt-dev] container,
 you can add `-DTAU_ROOT=<dir>` to the first cmake invocation.
 
 If the Ninja build system is present and you prefer it to Makefiles
@@ -86,11 +94,11 @@ then you may add `-G Ninja` to the penultimate line above:
 cmake -Wdev -Wdeprecated -S . -B build -G Ninja
 ```
 
-Once this is finished you will have an executable `cparse-llvm` in the `build` directory.
+Once this is finished, you will have an executable `cparse-llvm` in the `build` directory.
 
 ### 4. Running the tests (optional):
 
-Running the tests is incouraged to verify functionality.
+Running the tests is encouraged to verify functionality.
 
 ``` shell
 cd build
@@ -101,23 +109,23 @@ The tests are all located in the `tests` subdirectory of the project.
 [CMake] test fixtures and test dependencies ensure that:
 
  * The tests run in an order such that inter-test dependencies are satisfied
- * The SALT configurtion files are correctly staged to the build directory
- * Old instrumented versions of test sources are cleaned up JIT before being instrumented again
+ * The SALT configuration files are correctly staged to the build directory
+ * Old instrumented versions of test sources are cleaned up just in time before being instrumented again
    * This is so the user can inspect instrumented sources
  * Old object files are cleaned up
- * Old profiles associated with each test are JIT removed
- * New profiles are moved to subdirectories indicating which test they are assosciated with
+ * Old profiles associated with each test are removed just in time
+ * New profiles are moved to subdirectories indicating which test they are associated with
 
-By default the tests assume a TAU installation matching the [salt-dev]
+By default, the tests assume a TAU installation matching the [salt-dev]
 development image (located at `/usr/local/x86_64/` with a GCC and Clang configuration).
 
-To use a different TAU installation add `-DTAU_ROOT=<dir>` to the cmake invocation. 
+To use a different TAU installation, add `-DTAU_ROOT=<dir>` to the cmake invocation.
 The specified directory should point to a TAU install built with at least these two configurations:
 
  `-pthread -cc=clang -c++=clang++ -bfd=download -unwind=download -dwarf=download -otf=download`
 
  and
- 
+
  `-pthread -bfd=download -unwind=download -libdwarf=download -otf=download`
 
 ### 5. Example usage:
@@ -139,10 +147,11 @@ Running `tau_exec ./hello` should then produce a `profile.0.0.0` file.
 [CMake]: https://cmake.org
 [salt-dev]: https://github.com/ParaToolsInc/salt-dev
 [posted to Docker Hub]: https://hub.docker.com/repository/docker/paratools/salt-dev/general
+[salt-dev Docker Hub]: https://hub.docker.com/repository/docker/paratools/salt-dev/general
 [CMakeLists.txt file]: https://github.com/ParaToolsInc/salt/blob/364be5ddd0043281669ace6697dfaf05fe724511/CMakeLists.txt#L353-L386
 
-## Funding Acknowlegement
+## Funding Acknowledgement
 
 This material is based upon work supported by the U.S. Department of Energy, Office of Science, Office of SBIR and STTR Programs under Award Number DE-SC0022511.
 
-The material is based upon work supported by the National Aeronautics and Space Administration under Contract Number 80NSSC24PB401.
+This material is based upon work supported by the National Aeronautics and Space Administration under Contract Number 80NSSC24PB401.

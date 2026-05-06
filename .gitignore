@@ -1,1 +1,8 @@
 build
+build-*/
+.tmp/
+.claude/settings.local.json
+.claude/worktrees/
+.vscode/
+.spack-env/
+tau2/

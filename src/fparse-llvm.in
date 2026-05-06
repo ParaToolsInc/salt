@@ -22,7 +22,7 @@ set -o pipefail
 #set -o xtrace
 
 readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
-readonly _VERSION=@SALT_VERSION_MAJOR@.@SALT_VERSION_MINOR@
+readonly _VERSION="@SALT_VERSION_FULL@"
 readonly _SALT_MOD_SUFFIX=@SALT_MOD_SUFFIX@
 
 # get the absolute path of this script
@@ -67,7 +67,7 @@ fi
 # Set a whitelist of flags that can be passed to the flang frontend plugin
 # This is where libtooling for flang could help
 # List derived from output of `flang-new -fc1 -help`
-declare -a -r _WHITELISTED_FLAGS=( 
+declare -a -r _WHITELISTED_FLAGS=(
   -cpp
   -dM
   -E
@@ -276,7 +276,7 @@ if [[ -z "${output_file:-}" ]]; then
     else
         output_file="$(pwd)/${input_file%.*}.inst${file_ext//f/F}"
     fi
-    
+
 fi
 
 echo "output file: ${output_file:-\"<None given>\" }"
@@ -289,7 +289,7 @@ cmd=(flang-new
     -plugin salt-instrument
     -module-suffix "${_SALT_MOD_SUFFIX}"
     -I"${_SALT_INC_DIR}"
-    "${input_file}" 
+    "${input_file}"
     -o "${output_file}"
     "${args[@]}")
 if $show; then

@@ -1,0 +1,8 @@
+# SIF: exclude excluded_routine from Fortran instrumentation.
+# The Fortran matcher uses std::regex_match (full string) against the bare
+# subprogram name, so a plain unquoted routine name matches that name
+# exactly. Wildcards (`#` -> `.*`) are still available for prefix/suffix
+# matching but are not needed here because the entry is a literal name.
+BEGIN_EXCLUDE_LIST
+excluded_routine
+END_EXCLUDE_LIST

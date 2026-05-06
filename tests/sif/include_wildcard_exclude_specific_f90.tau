@@ -1,0 +1,11 @@
+# Combined INCLUDE + EXCLUDE per the TAU SIF semantics: the exclude list
+# operates on whatever survives the include filter. Here the include list
+# whitelists everything matching "#routine" (both keep_routine and
+# excluded_routine), then the exclude list pulls excluded_routine back out.
+# Expected outcome: only keep_routine retains its TAU timer.
+BEGIN_INCLUDE_LIST
+"#routine"
+END_INCLUDE_LIST
+BEGIN_EXCLUDE_LIST
+excluded_routine
+END_EXCLUDE_LIST
