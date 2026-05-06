@@ -14,7 +14,14 @@ To improve the usability of TAU,
 we introduce a next-generation source analysis toolkit called SALT.
 SALT is built using LLVM compiler technology,
 including the libTooling library, Clang's C and C++ parsers, and f18/Flang's Fortran parser.
-SALT currently supports LLVM/Clang versions 19, 20, and 21.
+SALT supports the following LLVM/Clang versions, each tested in CI against a matching [salt-dev] container image.
+The same images are also published to [Docker Hub][salt-dev Docker Hub] under the `paratools/salt-dev` repository.
+
+| LLVM/Clang version | GitHub Container Registry           | Docker Hub                |
+| ------------------ | ----------------------------------- | ------------------------- |
+| 19                 | `ghcr.io/paratoolsinc/salt-dev:1.3` | `paratools/salt-dev:1.3`  |
+| 20                 | `ghcr.io/paratoolsinc/salt-dev:1.4` | `paratools/salt-dev:1.4`  |
+| 21                 | `ghcr.io/paratoolsinc/salt-dev:1.5` | `paratools/salt-dev:1.5`  |
 
 ## Getting Started
 
@@ -140,6 +147,7 @@ Running `tau_exec ./hello` should then produce a `profile.0.0.0` file.
 [CMake]: https://cmake.org
 [salt-dev]: https://github.com/ParaToolsInc/salt-dev
 [posted to Docker Hub]: https://hub.docker.com/repository/docker/paratools/salt-dev/general
+[salt-dev Docker Hub]: https://hub.docker.com/repository/docker/paratools/salt-dev/general
 [CMakeLists.txt file]: https://github.com/ParaToolsInc/salt/blob/364be5ddd0043281669ace6697dfaf05fe724511/CMakeLists.txt#L353-L386
 
 ## Funding Acknowledgement
