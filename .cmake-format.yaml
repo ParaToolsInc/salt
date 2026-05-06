@@ -1,0 +1,9 @@
+---
+# cmake-lint / cmake-format configuration for the salt repository.
+
+format:
+  line_width: 100
+  tab_size: 2
+
+lint:
+  max_arguments: 8

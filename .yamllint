@@ -1,0 +1,21 @@
+---
+# yamllint configuration for the salt repository.
+
+extends: default
+
+rules:
+  # `---` document marker is optional for our YAML files.
+  document-start: disable
+  # `on:` is a reserved YAML truthy literal but the standard top-level key
+  # for GitHub Actions workflows; only relax for keys, not values.
+  truthy:
+    check-keys: false
+  # Workflow `run:` blocks frequently embed long shell pipelines, env
+  # values, and CMake invocations; wrapping hurts readability.
+  line-length: disable
+  indentation:
+    spaces: 2
+    indent-sequences: whatever
+    check-multi-line-strings: false
+  comments-indentation: disable
+  comments: disable
