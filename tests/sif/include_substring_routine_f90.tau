@@ -1,0 +1,6 @@
+# Substring "routine" in INCLUDE_LIST must NOT whitelist keep_routine or
+# excluded_routine. Locks in the matcher's full-string semantics on the
+# include side: bare entries are exact, not substrings (issue #47).
+BEGIN_INCLUDE_LIST
+routine
+END_INCLUDE_LIST

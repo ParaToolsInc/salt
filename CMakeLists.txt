@@ -721,6 +721,16 @@ if(TEST_FORTRAN)
     PASS_REGULAR_EXPRESSION "${_sif_excluded_pattern_fortran}"
   )
 
+  # Mirror of the EXCLUDE substring guard for the INCLUDE side: a bare
+  # entry "routine" must NOT whitelist keep_routine or excluded_routine
+  # via substring matching. With full-string semantics neither subprogram
+  # is on the whitelist, so neither timer should appear.
+  add_sif_test(routine_substring_include_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/include_substring_routine_f90.tau)
+  set_tests_properties(check_sif_routine_substring_include_nomatch_fortran
+    PROPERTIES
+    FAIL_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran};${_sif_excluded_pattern_fortran}"
+  )
+
   # A FILE_EXCLUDE entry that is only a substring of the source basename
   # must NOT exclude the file. Subprogram timers must still be emitted.
   add_sif_test(file_exclude_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_substring_f90.tau)
@@ -733,6 +743,25 @@ if(TEST_FORTRAN)
   # must NOT whitelist the file, so no TAU timers should appear.
   add_sif_test(file_include_substring_nomatch_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_substring_f90.tau)
   set_tests_properties(check_sif_file_include_substring_nomatch_fortran
+    PROPERTIES
+    FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
+  )
+
+  # FILE_INCLUDE_LIST with an actual `*` glob. The basename "sif_excl.f90"
+  # matches "sif_*.f90", so the file is whitelisted and keep_routine is
+  # instrumented. Exercises the glob-to-regex expansion path on file
+  # matching, separate from the literal-basename file_include_match test.
+  add_sif_test(file_include_glob_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_include_glob_f90.tau)
+  set_tests_properties(check_sif_file_include_glob_fortran
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "${_sif_keep_pattern_fortran}"
+  )
+
+  # FILE_EXCLUDE_LIST with an actual `*` glob. The basename "sif_excl.f90"
+  # matches "sif_*.f90", so the file is excluded and no TAU timers are
+  # emitted. Mirror of file_include_glob_fortran for the exclude path.
+  add_sif_test(file_exclude_glob_fortran fortran tests/fortran/sif_excl.f90 tests/sif/file_exclude_glob_f90.tau)
+  set_tests_properties(check_sif_file_exclude_glob_fortran
     PROPERTIES
     FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER"
   )
