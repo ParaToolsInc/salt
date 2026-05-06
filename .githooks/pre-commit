@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+#
+# pre-commit -- Validate .VERSION + lint staged files.
+#
+# Activated via: git config core.hooksPath .githooks
+# (set automatically by CMake configure when invoked inside a git checkout).
+#
+# Lint scope: only files staged in this commit. Existing tech debt in
+# unmodified files is not flagged here -- that is for a dedicated cleanup
+# pass. Missing linters emit a warning with install hints but do NOT block
+# the commit.
+#
+# Bypass with --no-verify.
+
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}" || exit 1
+
+fail=0
+
+#---------------------------------------------------------------------------
+# .VERSION syntax check (only when staged)
+#---------------------------------------------------------------------------
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx '\.VERSION'; then
+  declared="$(git show :.VERSION | tr -d '[:space:]')"
+  if [[ -z "${declared}" ]]; then
+    echo "pre-commit: .VERSION is empty." >&2
+    fail=1
+  elif [[ "${declared}" == v* ]]; then
+    echo "pre-commit: .VERSION must not include the 'v' prefix; that belongs on git tags only ('${declared}')." >&2
+    fail=1
+  elif [[ "${declared}" == *+* ]]; then
+    echo "pre-commit: .VERSION must not contain '+BUILDMETA'; derived from git describe at configure time ('${declared}')." >&2
+    fail=1
+  elif ! [[ "${declared}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+    echo "pre-commit: .VERSION ('${declared}') is not valid SemVer (MAJOR.MINOR.PATCH[-PRERELEASE])." >&2
+    fail=1
+  fi
+fi
+
+#---------------------------------------------------------------------------
+# Linters on staged files
+#---------------------------------------------------------------------------
+# Collect staged paths (Added/Copied/Modified/Renamed) into per-linter arrays.
+mapfile -t _staged < <(git diff --cached --name-only --diff-filter=ACMR)
+
+shell_files=()
+cmake_files=()
+yaml_files=()
+workflow_files=()
+
+for f in "${_staged[@]}"; do
+  [[ -f "${f}" ]] || continue
+  case "${f}" in
+    *.sh|*.bash|.githooks/*)
+      shell_files+=("${f}") ;;
+    src/*.in)
+      shell_files+=("${f}") ;;
+    *.cmake|CMakeLists.txt|*/CMakeLists.txt)
+      cmake_files+=("${f}") ;;
+  esac
+  case "${f}" in
+    .github/workflows/*.yml|.github/workflows/*.yaml)
+      workflow_files+=("${f}")
+      yaml_files+=("${f}") ;;
+    *.yml|*.yaml)
+      yaml_files+=("${f}") ;;
+  esac
+done
+
+warn_missing() {
+  local tool=$1 install_hint=$2
+  echo "pre-commit: '${tool}' not installed; skipping. Install: ${install_hint}" >&2
+}
+
+if [[ ${#shell_files[@]} -gt 0 ]]; then
+  # Run shellcheck on staged shell scripts (treat .in templates as bash).
+  if command -v shellcheck >/dev/null 2>&1; then
+    if ! shellcheck --shell=bash "${shell_files[@]}"; then
+      fail=1
+    fi
+  else
+    warn_missing shellcheck "brew install shellcheck (macOS) or apt install shellcheck (Debian)"
+  fi
+fi
+
+# cmake-lint
+if [[ ${#cmake_files[@]} -gt 0 ]]; then
+  if command -v cmake-lint >/dev/null 2>&1; then
+    if ! cmake-lint "${cmake_files[@]}"; then
+      fail=1
+    fi
+  else
+    warn_missing cmake-lint "uv tool install cmakelang --with pyyaml"
+  fi
+fi
+
+# yamllint (all yaml files)
+if [[ ${#yaml_files[@]} -gt 0 ]]; then
+  if command -v yamllint >/dev/null 2>&1; then
+    if ! yamllint "${yaml_files[@]}"; then
+      fail=1
+    fi
+  else
+    warn_missing yamllint "uv tool install yamllint"
+  fi
+fi
+
+# actionlint (only on workflow files)
+if [[ ${#workflow_files[@]} -gt 0 ]]; then
+  if command -v actionlint >/dev/null 2>&1; then
+    if ! actionlint "${workflow_files[@]}"; then
+      fail=1
+    fi
+  else
+    warn_missing actionlint "brew install actionlint (macOS) or see https://github.com/rhysd/actionlint"
+  fi
+fi
+
+exit "${fail}"

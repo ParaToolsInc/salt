@@ -58,14 +58,19 @@ include(CheckOutOfSourceBuild)
 check_out_of_source_build()
 
 # SALT project version
-# Later we can get this from `git describe`
-set (SALT_VERSION_MAJOR 0)
-set (SALT_VERSION_MINOR 2)
+# Sources of truth (see cmake/modules/SALTVersion.cmake):
+#   - .VERSION file (committed) -- canonical bare SemVer
+#   - git describe (when .git/ present) -- adds build metadata for dev builds
+include(SALTVersion)
+
+# When configuring inside a git checkout, point the clone at the vendored
+# .githooks/ directory so the version-drift pre-push hook is active.
+include(SALTGitHooks)
 
 # Print project logo, version and tag line
 file(READ ${CMAKE_CURRENT_LIST_DIR}/cmake/SALT-logo.txt SALT_LOGO)
 string(JOIN "\n         " SALT_GREETING "${SALT_LOGO}"
-  "SALT-FM, v${SALT_VERSION_MAJOR}.${SALT_VERSION_MINOR}: An LLVM-based Source Analysis Toolkit for HPC")
+  "SALT-FM, v${SALT_VERSION_FULL}: An LLVM-based Source Analysis Toolkit for HPC")
 if(NOT isMultiConfig)
   string(APPEND SALT_GREETING "\n         Build type: ${CMAKE_BUILD_TYPE}")
 endif()
@@ -90,7 +95,7 @@ set(CMAKE_CXX_STANDARD 17)
 # Create the main SALT project
 #-----------------------------
 project(saltfm
-  VERSION "${SALT_VERSION_MAJOR}.${SALT_VERSION_MINOR}"
+  VERSION "${SALT_VERSION_BASE}"
   DESCRIPTION "An LLVM-based Source Analysis Tookit for HPC"
   HOMEPAGE_URL "https://github.com/ParaToolsInc/salt"
   LANGUAGES CXX C)

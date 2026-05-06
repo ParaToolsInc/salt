@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# pre-push -- Reject tag pushes whose tag does not match .VERSION.
+#
+# Activated via: git config core.hooksPath .githooks
+# (set automatically by CMake configure when invoked inside a git checkout).
+#
+# Authoritative gate is the GitHub Actions tag-push workflow; this hook is a
+# convenience to catch drift before pushing. Bypass with --no-verify.
+
+set -euo pipefail
+
+remote="$1"
+url="$2"
+
+repo_root="$(git rev-parse --show-toplevel)"
+version_file="${repo_root}/.VERSION"
+
+if [[ ! -f "${version_file}" ]]; then
+  echo "pre-push: .VERSION not found at ${version_file}; skipping tag check." >&2
+  exit 0
+fi
+
+declared_version="$(tr -d '[:space:]' < "${version_file}")"
+
+# stdin format: <local-ref> <local-sha> <remote-ref> <remote-sha>
+fail=0
+while read -r local_ref _local_sha remote_ref _remote_sha; do
+  case "${remote_ref}" in
+    refs/tags/v*)
+      tag_version="${remote_ref#refs/tags/v}"
+      if [[ "${tag_version}" != "${declared_version}" ]]; then
+        echo "pre-push: tag '${remote_ref}' does not match .VERSION ('${declared_version}')." >&2
+        echo "pre-push: bump .VERSION to '${tag_version}' (or move/recreate the tag) and recommit before pushing." >&2
+        fail=1
+      fi
+      ;;
+    refs/tags/*)
+      echo "pre-push: tag '${remote_ref}' does not start with 'v'; SALT release tags must use 'v<SemVer>' form." >&2
+      fail=1
+      ;;
+    *)
+      ;;
+  esac
+done
+
+# Silence unused warnings (params kept for future use / git contract).
+: "${remote}" "${url}" "${local_ref:-}"
+
+exit "${fail}"
