@@ -579,11 +579,15 @@ namespace salt::fortran {
             // Convert lines in shell glob format (where "*" means zero or more characters)
             // to regex version (where ".*" means zero or more characters).
             // This is used for files in TAU selective instrumentation files.
-            static std::regex starRegex{R"(\*)"};
-            const std::string starString{std::regex_replace(globString, starRegex, ".*")};
-            // Escape all special regex characters except for "*" which was previously handled.
+            // Order matters: escape regex metacharacters first so any "."
+            // characters in the input become "\\.", then substitute the
+            // surviving literal "*" with ".*". Doing the "*" -> ".*" rewrite
+            // first would let the inserted "." get escaped to "\\.", turning
+            // the wildcard into a quantifier on a literal dot.
             static const std::regex metacharacters(R"([\.\^\$\+\(\)\[\]\{\}\|\?])");
-            return std::regex_replace(starString, metacharacters, R"(\$&)");
+            const std::string escapedString{std::regex_replace(globString, metacharacters, R"(\$&)")};
+            static const std::regex starRegex{R"(\*)"};
+            return std::regex_replace(escapedString, starRegex, ".*");
         }
 
         [[nodiscard]] static bool shouldInstrumentFile(const std::filesystem::path &filePath) {
