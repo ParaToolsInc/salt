@@ -22,6 +22,7 @@ The same images are also published to [Docker Hub][salt-dev Docker Hub] under th
 | 19                 | `ghcr.io/paratoolsinc/salt-dev:1.3` | `paratools/salt-dev:1.3`  |
 | 20                 | `ghcr.io/paratoolsinc/salt-dev:1.4` | `paratools/salt-dev:1.4`  |
 | 21                 | `ghcr.io/paratoolsinc/salt-dev:1.5` | `paratools/salt-dev:1.5`  |
+| 22                 | `ghcr.io/paratoolsinc/salt-dev:1.6` | `paratools/salt-dev:1.6`  |
 
 ## Getting Started
 
@@ -172,7 +173,27 @@ setting `TAU_MAKEFILE=/usr/local/x86_64/lib/Makefile.tau-pthread` will allow you
 to compile `hello.inst.c` with `tau_cc.sh -optLinkOnly -D... hello.inst.c -o hello`.
 Running `tau_exec ./hello` should then produce a `profile.0.0.0` file.
 
+## Notes for package maintainers
 
+When SALT is configured inside a git checkout, the build system installs
+client-side git hooks (in the working tree's `.git/config` via
+`core.hooksPath`) to enforce `.VERSION` / tag agreement during local
+development. This is convenience tooling for contributors and is
+irrelevant when packaging release tarballs or building from a source
+snapshot pulled by a package manager.
+
+Distribution build recipes (Spack, RPM, Debian, conda-forge, Nix, etc.)
+should pass:
+
+``` shell
+-DSALT_INSTALL_GIT_HOOKS=OFF
+```
+
+to the cmake invocation, regardless of whether the source tree happens
+to be a git checkout. The flag is a no-op when there is no `.git/`
+directory, but setting it explicitly documents intent and avoids
+modifying the local clone's git configuration in environments where
+that is unexpected.
 
 [TAU Performance System]: http://www.tau.uoregon.edu/
 [CMake]: https://cmake.org
