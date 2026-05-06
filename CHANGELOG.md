@@ -6,12 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- LLVM 20, 21, and 22 build compatibility while preserving LLVM 19 support;
-  CI matrix expanded against `salt-dev:1.3` (LLVM 19), `:1.4` (LLVM 20), and
-  `:1.5` (LLVM 21), and `spack concretize` is run as a smoketest
+- LLVM 20, 21, and 22 build compatibility while preserving LLVM 19 support,
+  with the CI matrix expanded against `salt-dev:1.3` (LLVM 19), `:1.4`
+  (LLVM 20), and `:1.5` (LLVM 21), and a `spack concretize` smoketest
   ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman):
   - [#34](https://github.com/ParaToolsInc/salt/issues/34) - Fortran build
     support for LLVM 20.
+  - [#30](https://github.com/ParaToolsInc/salt/issues/30) - `-Werror`
+    restricted to Debug builds so release configurations are not blocked
+    by new compiler warnings.
+- Selective Instrumentation File (SIF) matcher correctness and coverage
+  ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman):
   - [#47](https://github.com/ParaToolsInc/salt/issues/47) - Fortran SIF
     matcher now requires a full-string match instead of a substring search,
     so routines and files with overlapping names are no longer incorrectly
@@ -19,14 +24,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - [#29](https://github.com/ParaToolsInc/salt/issues/29) - added tests
     covering SIF routine whitelist/blacklist, file-level include/exclude,
     combined INCLUDE+EXCLUDE semantics, and glob handling.
-  - [#30](https://github.com/ParaToolsInc/salt/issues/30) - `-Werror`
-    restricted to Debug builds so release configurations are not blocked
-    by new compiler warnings.
-  - [#44](https://github.com/ParaToolsInc/salt/issues/44) (reported by
-    @nchaimov) - TAU-dependent tests are skipped instead of failing the
-    build when the required TAU Makefiles are missing.
   - Preserves `*` when converting SIF globs to regular expressions in the
     Flang plugin (regression caught while fixing #47).
+- Test-suite resilience: TAU-dependent tests are skipped instead of failing
+  the build when the required TAU Makefiles are missing
+  ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman, closes
+  [#44](https://github.com/ParaToolsInc/salt/issues/44) reported by
+  @nchaimov).
+- Project version is now derived from a committed `.VERSION` file plus
+  `git describe` build metadata, replacing hardcoded version constants
+  that had drifted to `0.2` after v0.3.0 shipped. A vendored `.githooks/`
+  directory (auto-installed by `cmake` configure) and a tag-push CI
+  workflow guard against `.VERSION`/tag drift
+  ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman).
 - C++ instrumentation API now reads entries from the configuration file,
   with new scoped variants `main_insert_scope` and
   `function_begin_insert_scope`; minimum required CMake version raised to
