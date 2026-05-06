@@ -17,7 +17,10 @@ if(POLICY CMP0042)
   set(CMAKE_MACOSX_RPATH ON)
 endif()
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15") # Catalina is oldest supported macOS
+# Big Sur is the oldest macOS supported by libc++ in LLVM 11+ (the floor
+# we ship against). Targeting 10.15 emits "selected platform is no longer
+# supported" warnings from <__configuration/availability.h>.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
 
 # Test if being built under a multi-config generator, i.e. and IDE like MSVS
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -250,9 +253,13 @@ target_include_directories(cparse-llvm PUBLIC
 target_compile_features(cparse-llvm PUBLIC cxx_std_17)
 # Inherit definitions, compile features, etc.
 target_link_libraries(cparse-llvm PUBLIC SALT_LLVM_TOOLING)
-# You can try adding -static
+# You can try adding -static. The --as-needed/--no-allow-shlib-undefined/
+# --no-undefined flags are GNU ld extensions; Apple ld doesn't recognize
+# them, so gate on linker family.
 target_link_options(cparse-llvm PUBLIC
-  -Wl,--as-needed -Wl,--no-allow-shlib-undefined -Wl,--no-undefined)
+  $<$<NOT:$<PLATFORM_ID:Darwin>>:-Wl,--as-needed>
+  $<$<NOT:$<PLATFORM_ID:Darwin>>:-Wl,--no-allow-shlib-undefined>
+  $<$<NOT:$<PLATFORM_ID:Darwin>>:-Wl,--no-undefined>)
 # Turn on debug output if a debug build is being built
 target_compile_definitions(cparse-llvm PUBLIC $<$<CONFIG:Debug>:DEBUG_NO_WAY>)
 # Install the target
@@ -374,8 +381,12 @@ if(MLIR_FOUND AND Flang_FOUND)
     "${CMAKE_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/include")
   target_compile_features(salt-flang-plugin PUBLIC cxx_std_17)
   target_link_libraries(salt-flang-plugin PUBLIC SALT_FLANG_FRONTEND)
+  # Apple ld uses `-undefined dynamic_lookup`; GNU ld uses --as-needed and
+  # rejects -undefined dynamic_lookup. Pick per linker.
   target_link_options(salt-flang-plugin PUBLIC
-    -Wl,--as-needed -Wl,-undefined -Wl,dynamic_lookup)
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:-Wl,--as-needed>
+    $<$<PLATFORM_ID:Darwin>:-Wl,-undefined>
+    $<$<PLATFORM_ID:Darwin>:-Wl,dynamic_lookup>)
   set_target_properties(salt-flang-plugin PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}")

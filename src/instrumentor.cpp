@@ -1,6 +1,8 @@
 #define RYML_SINGLE_HDR_DEFINE_NOW
 #define RYML_SHARED
 
+#include <sstream>
+
 #include <ryml_all.hpp>
 #include "instrumentor.hpp"
 #include "clang/AST/ASTConsumer.h"
@@ -134,7 +136,7 @@ void dump_all_locs(bool (*filter)(inst_loc *))
 
 std::string ReplacePhrase(std::string str, std::string phrase, std::string to_replace)
 {
-    while (str.find(phrase) != std::string::npos) 
+    while (str.find(phrase) != std::string::npos)
     {
         str.replace(str.find(phrase), phrase.length(), to_replace);
     }
@@ -197,7 +199,7 @@ void make_end_func_code(inst_loc *loc, std::string &code, std::string &line, rym
             if (!loc->skip)
             {
                 // Insert on function begin insert
-                for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children()) 
+                for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children())
                 {
                     std::stringstream ss;
                     ss << child.val();
@@ -224,7 +226,7 @@ void make_end_func_code(inst_loc *loc, std::string &code, std::string &line, rym
             {
                 // also throw in brackets in case SOMEONE didn't put brackets around their if
                 // Insert on function begin insert
-                for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children()) 
+                for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children())
                 {
                     std::stringstream ss;
                     ss << child.val();
@@ -246,7 +248,7 @@ void make_end_func_code(inst_loc *loc, std::string &code, std::string &line, rym
                     code += line.substr(first_pos, last_pos - first_pos + 1);
 
                     // Insert on function begin insert
-                    for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children()) 
+                    for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children())
                     {
                         std::stringstream ss;
                         ss << child.val();
@@ -269,7 +271,7 @@ void make_end_func_code(inst_loc *loc, std::string &code, std::string &line, rym
                     code += "); ";
 
                      // Insert on function begin insert
-                    for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children()) 
+                    for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children())
                     {
                         std::stringstream ss;
                         ss << child.val();
@@ -291,7 +293,7 @@ void make_end_func_code(inst_loc *loc, std::string &code, std::string &line, rym
                     code += line.substr(first_pos, last_pos - first_pos + 1);
 
                      // Insert on function begin insert
-                    for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children()) 
+                    for (ryml::NodeRef const& child : yaml_tree["function_end_insert"].children())
                     {
                         std::stringstream ss;
                         ss << child.val();
@@ -425,7 +427,7 @@ bool check_file_against_list(std::list<std::string> list, std::string fname)
         }
     }
     return false;
-}   
+}
 
 
 void makeFuncAndTimerNames(FunctionDecl *func, ASTContext *context, SourceManager &src_mgr, std::string &func_name,
@@ -714,7 +716,7 @@ class FindFunctionConsumer : public clang::ASTConsumer
         {
             SourceLocation srcloc = decl->getLocation();
             // always exclude system headers
-            if (src_mgr.isInSystemHeader(srcloc) || 
+            if (src_mgr.isInSystemHeader(srcloc) ||
                 src_mgr.isInExternCSystemHeader(srcloc) ||
                 src_mgr.isInSystemMacro(srcloc))
             {
@@ -767,7 +769,7 @@ class FindFunctionAction : public ASTFrontendAction
     }
 };
 
-instrumentor::instrumentor() 
+instrumentor::instrumentor()
 {
     // Constructor currently does not need to do anything
 }
@@ -782,7 +784,7 @@ void instrumentor::run_tool()
     Tool->run(tooling::newFrontendActionFactory<FindFunctionAction>().get());
 }
 
-void instrumentor::instr_request(std::list<std::string> list, bool include) 
+void instrumentor::instr_request(std::list<std::string> list, bool include)
 {
     for (inst_loc *loc : inst_locs)
     {
@@ -909,7 +911,7 @@ void instrumentor::instrument()
     // for (std::string fname : files_to_go) {
     //     printf("Instrumenting %s\n", fname.c_str());
     // }
-    
+
     for (std::string fname : files_to_go)
     {
         // if this isn't the file we passed in, continue
@@ -1042,7 +1044,7 @@ void instrumentor::instrument()
             }
         }
 
-        llvm::outs() << "Instrumentation: " << yaml_tree["instrumentation"].val() << "\n"; 
+        llvm::outs() << "Instrumentation: " << yaml_tree["instrumentation"].val() << "\n";
         instrument_file(og_file, inst_file, fname, inst_locations, use_cxx_api, yaml_tree);
         og_file.close();
         inst_file.close();

@@ -21,7 +21,7 @@ set -o pipefail
 #set -o verbose
 #set -o xtrace
 
-readonly _SALTFM_PLUGIN_SO=libsalt-flang-plugin.so
+readonly _SALTFM_PLUGIN_SO="libsalt-flang-plugin@CMAKE_SHARED_LIBRARY_SUFFIX@"
 readonly _VERSION="@SALT_VERSION_FULL@"
 readonly _SALT_MOD_SUFFIX=@SALT_MOD_SUFFIX@
 

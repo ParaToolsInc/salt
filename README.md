@@ -94,6 +94,37 @@ then you may add `-G Ninja` to the penultimate line above:
 cmake -Wdev -Wdeprecated -S . -B build -G Ninja
 ```
 
+#### macOS (Homebrew LLVM 22)
+
+Apple's bundled clang does not ship `flang`. Install the Homebrew formulae
+([instructions](https://formulae.brew.sh/formula/llvm) and
+[flang](https://formulae.brew.sh/formula/flang)):
+
+``` shell
+brew install llvm flang ninja
+```
+
+Then configure with explicit flags so clang++ uses Homebrew libc++ headers
+against the Xcode SDK rather than the older Command Line Tools SDK:
+
+``` shell
+cmake -Wdev -Wdeprecated -G Ninja -S . -B build \
+  -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+  -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix llvm);$(brew --prefix flang)" \
+  -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
+  -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+```
+
+Notes:
+
+- `CMAKE_OSX_DEPLOYMENT_TARGET` defaults to `11.0` (libc++ in LLVM ≥ 11
+  emits `<__configuration/availability.h>` warnings below this floor).
+- If TAU is not available, pass `-DSALT_REQUIRE_TAU=OFF`; TAU-dependent
+  tests are skipped automatically.
+
 Once this is finished, you will have an executable `cparse-llvm` in the `build` directory.
 
 ### 4. Running the tests (optional):
