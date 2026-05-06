@@ -15,6 +15,8 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Tooling/CommonOptionsParser.h"
+#include "llvm/Config/llvm-config.h"
+#include "llvm/Support/CommandLine.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -262,6 +264,16 @@ void findFiles(const std::vector<std::string>& files, instrumentor& CI)
 
 int main(int argc, const char **argv)
 {
+    llvm::cl::SetVersionPrinter([](llvm::raw_ostream &OS) {
+        OS << "SALT-FM Version: " << SALT_VERSION_FULL << "\n";
+        OS << "LLVM version " << LLVM_VERSION_STRING << "\n";
+#ifdef NDEBUG
+        OS << "  Optimized build.\n";
+#else
+        OS << "  Debug build.\n";
+#endif
+    });
+
     int new_argc = argc;
     char **new_argv = addHeadersToCommand(&new_argc, argv);
 
@@ -296,5 +308,5 @@ int main(int argc, const char **argv)
     findFiles(OptionsParser.getSourcePathList(), CodeInstrumentor); //Locate source files and mark for instrumentation/skipping
 
     CodeInstrumentor.instrument();
-    
+
 }
