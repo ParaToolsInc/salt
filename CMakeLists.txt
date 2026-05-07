@@ -953,10 +953,15 @@ if(HAVE_TAU)
         DEPENDS setup_${comp}_dir
       )
       # Test to actually instrument and build the test source using TAU
-      # compiler wrappers & salt parser.
+      # compiler wrappers & salt parser.  Per-test extra sources can be
+      # supplied via an `_${test_base_name}_extra_sources` variable in
+      # the caller's scope (e.g. forward_decl ships a stub TU that
+      # defines a symbol the fixture deliberately leaves bodyless to
+      # exercise the #53 regression coverage in cparse-llvm).
       add_test(NAME compile_${lower_comp}_${test_name}
         COMMAND ${tauc} ${tauc_opts} ${compile_opts}
-          -o ${test_base_name}.${lower_comp} ${test_path}
+          -o ${test_base_name}.${lower_comp}
+          ${test_path} ${_${test_base_name}_extra_sources}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
       )
       set_tests_properties(compile_${lower_comp}_${test_name}
@@ -1019,6 +1024,13 @@ if(HAVE_TAU)
   #   funcsub.f90
   #   myhi.f
   # )
+
+  # Pair forward_decl.c with a stub TU that defines the symbol the
+  # fixture deliberately leaves bodyless.  cparse-llvm still only
+  # parses forward_decl.c (so #53's bodyless-FunctionDecl path is
+  # exercised); the stub satisfies the link so we can also assert the
+  # instrumented binary runs and produces a TAU profile.
+  set(_forward_decl_extra_sources ${CMAKE_SOURCE_DIR}/tests/forward_decl_stub.c)
 
   foreach(test_source IN LISTS TESTS_LIST)
     compile_instrumented(${test_source})
