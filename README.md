@@ -26,6 +26,16 @@ The same images are also published to [Docker Hub][salt-dev Docker Hub] under th
 
 ## Getting Started
 
+> [!NOTE]
+> Configuring SALT inside a git checkout (i.e. running `cmake` for the first
+> time on a clone) sets `core.hooksPath` in that clone's local git config to
+> point at the vendored `.githooks/` directory, so contributor-side
+> `pre-commit` and `pre-push` hooks become active automatically. The hooks
+> are advisory and version-controlled with the rest of the source tree; they
+> are not installed system-wide. Distribution build recipes and other
+> packaging contexts should disable this -- see [Notes for package
+> maintainers](#notes-for-package-maintainers).
+
 The build system for SALT uses [CMake] as the build system generator
 (also known as a meta-build system).
 It also requires either a full installation of LLVM and Clang including the
