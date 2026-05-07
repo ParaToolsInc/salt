@@ -433,11 +433,16 @@ bool check_file_against_list(std::list<std::string> list, std::string fname)
 void makeFuncAndTimerNames(FunctionDecl *func, ASTContext *context, SourceManager &src_mgr, std::string &func_name,
                          std::string &timer_name)
 {
+    // PDT TAU instrumentor convention: timer source-range spans from the
+    // function declaration head (return type / signature start) to the
+    // closing brace of the body (utils/tau_instrumentor.cpp:200-209 in TAU
+    // uses fatItem->headBegin() -> bodyEnd()).  Using getBody() for the
+    // start would put start_col on the opening `{` and miss the signature.
     Stmt *func_body = func->getBody();
-    SourceRange range = func_body->getSourceRange();
+    SourceRange body_range = func_body->getSourceRange();
 
-    FullSourceLoc start_loc = context->getFullLoc(range.getBegin());
-    FullSourceLoc end_loc = context->getFullLoc(range.getEnd());
+    FullSourceLoc start_loc = context->getFullLoc(func->getSourceRange().getBegin());
+    FullSourceLoc end_loc = context->getFullLoc(body_range.getEnd());
 
     unsigned int start_line = start_loc.getSpellingLineNumber();
     unsigned int start_col = start_loc.getSpellingColumnNumber();

@@ -37,6 +37,20 @@ limitations under the License.
 #include <dprint.hpp>
 #include <ryml_all.hpp>
 
+// On macOS, ryml_all.hpp transitively includes <sys/param.h>, which
+// defines MAX(a,b) and MIN(a,b) as function-like macros.  Those collide
+// with the MAX/MIN member functions of Fortran::evaluate::value::Integer
+// (flang/Evaluate/integer.h, included via flang/Evaluate/tools.h),
+// surfacing as "too few arguments provided to function-like macro
+// invocation" on the Integer member declarations.  Undef before pulling
+// in the flang headers below.
+#ifdef MAX
+#undef MAX
+#endif
+#ifdef MIN
+#undef MIN
+#endif
+
 #include <clang/Basic/SourceLocation.h>
 
 #include "flang/Frontend/FrontendActions.h"
@@ -207,11 +221,18 @@ namespace salt::fortran {
             // at the end of the body, see llvm-project#196291), so we use
             // the wrapper's bookkeeping as the single source of truth.
             //
+            // Also captures the column of the last character of the End
+            // statement, used by the TAU timer-name source-range field
+            // (PDT convention: inclusive last-char column).  Note: flang's
+            // GetSourcePositionRange().second.column is one-past-last, so
+            // we subtract 1.
+            //
             // When an InternalSubprogramPart is present (a `contains`
             // section), the procedure's body ends just before the
             // ContainsStmt; otherwise it ends just before the End statement.
             template <typename SubprogramT, typename EndStmtT>
-            void captureBodyEndLines(const SubprogramT &subprogram, int &endLineOut, int &containsLineOut) {
+            void captureBodyEndLines(const SubprogramT &subprogram, int &endLineOut, int &endColOut,
+                                     int &containsLineOut) {
                 // Reset so a procedure that has no `contains` does not inherit
                 // its parent's containsLine bookkeeping.  Without this, an
                 // internal procedure walked from inside an outer procedure
@@ -220,10 +241,14 @@ namespace salt::fortran {
                 // boundary -- breaking the line-sorted instrumentation
                 // invariant.
                 endLineOut = 0;
+                endColOut = 1;
                 containsLineOut = 0;
                 const auto &endStmt = std::get<Fortran::parser::Statement<EndStmtT> >(subprogram.t);
                 if (const auto pos = locationFromSource(parsing, endStmt.source, false); pos.has_value()) {
                     endLineOut = pos.value().line;
+                }
+                if (const auto pos = locationFromSource(parsing, endStmt.source, true); pos.has_value()) {
+                    endColOut = pos.value().column > 1 ? pos.value().column - 1 : 1;
                 }
                 const auto &maybeInternalPart =
                     std::get<std::optional<Fortran::parser::InternalSubprogramPart> >(subprogram.t);
@@ -237,22 +262,58 @@ namespace salt::fortran {
                 }
             }
 
+            // Capture the column where the subprogram's start statement
+            // (subroutine/function/module-procedure keyword or its prefix)
+            // begins.  Uses the wrapping `Statement<StartStmtT>::source`
+            // from the parent tuple so we get the keyword position rather
+            // than the procedure name's column.
+            template <typename SubprogramT, typename StartStmtT>
+            int captureStartCol(const SubprogramT &subprogram) {
+                const auto &startStmt = std::get<Fortran::parser::Statement<StartStmtT> >(subprogram.t);
+                if (const auto pos = locationFromSource(parsing, startStmt.source, false); pos.has_value()) {
+                    return pos.value().column;
+                }
+                return 1;
+            }
+
+            // MainProgram special-case: ProgramStmt is optional (Fortran
+            // permits an implicit main program with no `program` keyword).
+            // Falls back to column 1 for the implicit form.
+            int captureMainProgramStartCol(const Fortran::parser::MainProgram &mainProgram) {
+                const auto &maybeProgStmt =
+                    std::get<std::optional<Fortran::parser::Statement<Fortran::parser::ProgramStmt> > >(
+                        mainProgram.t);
+                if (maybeProgStmt.has_value()) {
+                    if (const auto pos = locationFromSource(parsing, maybeProgStmt.value().source, false);
+                        pos.has_value()) {
+                        return pos.value().column;
+                    }
+                }
+                return 1;
+            }
+
             bool Pre(const Fortran::parser::MainProgram &mainProgram) {
                 isInMainProgram_ = true;
                 captureBodyEndLines<Fortran::parser::MainProgram, Fortran::parser::EndProgramStmt>(
-                    mainProgram, mainProgramEndLine_, mainProgramContainsLine_);
+                    mainProgram, mainProgramEndLine_, mainProgramEndCol_, mainProgramContainsLine_);
+                mainProgramStartCol_ = captureMainProgramStartCol(mainProgram);
                 return true;
             }
 
             bool Pre(const Fortran::parser::SubroutineSubprogram &subprogram) {
                 captureBodyEndLines<Fortran::parser::SubroutineSubprogram, Fortran::parser::EndSubroutineStmt>(
-                    subprogram, subProgramEndLine_, subProgramContainsLine_);
+                    subprogram, subProgramEndLine_, subProgramEndCol_, subProgramContainsLine_);
+                subProgramStartCol_ =
+                    captureStartCol<Fortran::parser::SubroutineSubprogram, Fortran::parser::SubroutineStmt>(
+                        subprogram);
                 return true;
             }
 
             bool Pre(const Fortran::parser::FunctionSubprogram &subprogram) {
                 captureBodyEndLines<Fortran::parser::FunctionSubprogram, Fortran::parser::EndFunctionStmt>(
-                    subprogram, subProgramEndLine_, subProgramContainsLine_);
+                    subprogram, subProgramEndLine_, subProgramEndCol_, subProgramContainsLine_);
+                subProgramStartCol_ =
+                    captureStartCol<Fortran::parser::FunctionSubprogram, Fortran::parser::FunctionStmt>(subprogram);
                 return true;
             }
 
@@ -266,7 +327,10 @@ namespace salt::fortran {
                 captureBodyEndLines<
                     Fortran::parser::SeparateModuleSubprogram,
                     Fortran::parser::EndMpSubprogramStmt>(
-                    subprogram, subProgramEndLine_, subProgramContainsLine_);
+                    subprogram, subProgramEndLine_, subProgramEndCol_, subProgramContainsLine_);
+                subProgramStartCol_ =
+                    captureStartCol<Fortran::parser::SeparateModuleSubprogram,
+                        Fortran::parser::MpSubprogramStmt>(subprogram);
                 return true;
             }
 
@@ -274,6 +338,8 @@ namespace salt::fortran {
                 verboseStream() << "Exit main program: " << mainProgramName_ << "\n";
                 isInMainProgram_ = false;
                 mainProgramEndLine_ = 0;
+                mainProgramEndCol_ = 1;
+                mainProgramStartCol_ = 1;
                 mainProgramContainsLine_ = 0;
             }
 
@@ -361,6 +427,8 @@ namespace salt::fortran {
                 skipInstrumentSubprogram_ = false;
                 subprogramName_.clear();
                 subProgramEndLine_ = 0;
+                subProgramEndCol_ = 1;
+                subProgramStartCol_ = 1;
                 subProgramContainsLine_ = 0;
             }
 
@@ -387,6 +455,8 @@ namespace salt::fortran {
                 subprogramName_.clear();
                 subProgramLine_ = 0;
                 subProgramEndLine_ = 0;
+                subProgramEndCol_ = 1;
+                subProgramStartCol_ = 1;
                 subProgramContainsLine_ = 0;
             }
 
@@ -418,6 +488,8 @@ namespace salt::fortran {
                 subprogramName_.clear();
                 subProgramLine_ = 0;
                 subProgramEndLine_ = 0;
+                subProgramEndCol_ = 1;
+                subProgramStartCol_ = 1;
                 subProgramContainsLine_ = 0;
             }
 
@@ -468,13 +540,25 @@ namespace salt::fortran {
                 // Insert the timer start in the Pre phase (when we first visit the node)
                 // and the timer stop in the Post phase (when we return after visiting the node's children).
                 if (pre) {
+                    // Source-range columns for the TAU timer name follow the
+                    // PDT convention (head-begin -> body-end, both inclusive).
+                    // Start col is the keyword column captured from the
+                    // wrapping Statement<StartStmt>; end col is the last char
+                    // of the End statement.  When the body is bounded by a
+                    // ContainsStmt instead of the End, fall back to col 1
+                    // for the end (the boundary line lands on the
+                    // ContainsStmt itself, whose extent we don't track).
+                    const int startCol = isInMainProgram_ ? mainProgramStartCol_ : subProgramStartCol_;
+                    const int endCol = containsLine > 0
+                        ? 1
+                        : (isInMainProgram_ ? mainProgramEndCol_ : subProgramEndCol_);
                     std::stringstream ss;
                     ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
                     ss << " [{" << startLoc.sourceFile->path() << "} {";
                     ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
-                    ss << ",1}-{";
+                    ss << "," << startCol << "}-{";
                     ss << endLine + 1;
-                    ss << ",1}]";
+                    ss << "," << endCol << "}]";
 
                     const std::string timerName{ss.str()};
 
@@ -609,10 +693,20 @@ namespace salt::fortran {
             // ExecutionPartConstruct's source mapping (issue #31).
             int mainProgramEndLine_{0};
             int mainProgramContainsLine_{0};
+            // Columns for the TAU timer name source-range field.  Captured
+            // from the wrapping Statement<StartStmt>::source for start
+            // (keyword position; defaults to 1 for the implicit-main form
+            // and as a generic fallback) and from
+            // Statement<EndStmt>::source's last-character column for end
+            // (PDT-style inclusive last-char convention).
+            int mainProgramStartCol_{1};
+            int mainProgramEndCol_{1};
             std::string subprogramName_;
             int subProgramLine_{0};
             int subProgramEndLine_{0};
             int subProgramContainsLine_{0};
+            int subProgramStartCol_{1};
+            int subProgramEndCol_{1};
 
             bool skipInstrumentFile_;
             bool skipInstrumentSubprogram_{false};
