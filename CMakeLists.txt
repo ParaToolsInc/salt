@@ -1015,6 +1015,7 @@ if(TEST_FORTRAN)
     internal-func.f90
     interface_test.f90
     submodule_test.f90
+    separate-module-procedure.f90
   )
 
   # Sources that use obsolescent (but still standard) features
@@ -1024,6 +1025,7 @@ if(TEST_FORTRAN)
   set(FORTRAN_TESTS_PERMISSIVE_SOURCES
     alternate-return.f90
     label-do-at-end.f90
+    separate-module-procedure.f90
   )
 
   # Add a smoke test of the fparse-llvm script

@@ -254,6 +254,20 @@ namespace salt::fortran {
                 return true;
             }
 
+            // F2018 R1538: separate-module-subprogram, used by the
+            // `module procedure foo ... end procedure foo` form in
+            // submodules.  Structurally identical to SubroutineSubprogram /
+            // FunctionSubprogram (MpSubprogramStmt header, SpecificationPart,
+            // ExecutionPart, optional InternalSubprogramPart, EndMpSubprogramStmt
+            // tail), and reuses the same body-end bookkeeping.
+            bool Pre(const Fortran::parser::SeparateModuleSubprogram &subprogram) {
+                captureBodyEndLines<
+                    Fortran::parser::SeparateModuleSubprogram,
+                    Fortran::parser::EndMpSubprogramStmt>(
+                    subprogram, subProgramEndLine_, subProgramContainsLine_);
+                return true;
+            }
+
             void Post(const Fortran::parser::MainProgram &) {
                 verboseStream() << "Exit main program: " << mainProgramName_ << "\n";
                 isInMainProgram_ = false;
@@ -305,6 +319,33 @@ namespace salt::fortran {
 
             void Post(const Fortran::parser::FunctionSubprogram &) {
                 verboseStream() << "Exit Function: " << subprogramName_ << "\n";
+                skipInstrumentSubprogram_ = false;
+                subprogramName_.clear();
+                subProgramLine_ = 0;
+                subProgramEndLine_ = 0;
+                subProgramContainsLine_ = 0;
+            }
+
+            // Header statement for a separate module procedure body
+            // (`module procedure foo` form, F2018 R1539).  Mirrors the
+            // SubroutineStmt / FunctionStmt handlers: capture the name and
+            // the line of the procedure declaration, and honour selective
+            // instrumentation.
+            bool Pre(const Fortran::parser::MpSubprogramStmt &mpStmt) {
+                isInMainProgram_ = false;
+                subprogramName_ = mpStmt.v.ToString();
+                subProgramLine_ = parsing->allCooked().GetSourcePositionRange(mpStmt.v.source)->first.line;
+                verboseStream() << "Enter Module Procedure: " << subprogramName_ << "\n";
+                if (!shouldInstrumentSubprogram(subprogramName_)) {
+                    verboseStream() << "Skipping instrumentation of " << subprogramName_ <<
+                            " due to selective instrumentation\n";
+                    skipInstrumentSubprogram_ = true;
+                }
+                return true;
+            }
+
+            void Post(const Fortran::parser::SeparateModuleSubprogram &) {
+                verboseStream() << "Exit Module Procedure: " << subprogramName_ << "\n";
                 skipInstrumentSubprogram_ = false;
                 subprogramName_.clear();
                 subProgramLine_ = 0;
