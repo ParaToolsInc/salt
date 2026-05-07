@@ -1016,6 +1016,7 @@ if(TEST_FORTRAN)
     interface_test.f90
     submodule_test.f90
     separate-module-procedure.f90
+    pure-and-elemental.f90
   )
 
   # Sources that use obsolescent (but still standard) features
@@ -1081,6 +1082,67 @@ if(TEST_FORTRAN)
       "instrumenting .if .<cond>. return <expr>.;instrumenting .return <expr>."
     DEPENDS instrument_alternate-return.f90
   )
+
+  # Per-form skip checks: each minimal source contains exactly one
+  # pure / elemental / impure-elemental / module-procedure body and
+  # nothing else.  The companion check_no_tau_<src> test reads back
+  # the instrumented output and fails if any TAU_PROFILE_* call
+  # appears, which is the structural assertion that the procedure
+  # was skipped.  Less brittle than pinning warning text.
+  set(FORTRAN_TESTS_PURE_SKIP_SOURCES
+    pure-fn-only.f90
+    elemental-fn-only.f90
+    impure-elemental-only.f90
+    mp-pure-only.f90
+    mp-elemental-only.f90
+  )
+
+  # Sources whose check_no_tau_<src> test currently fails because the
+  # plugin does not yet detect pure / elemental attributes that live
+  # on a separate-module-procedure's interface declaration in the
+  # parent module (issue #36 limitation).  Marked WILL_FAIL=TRUE so
+  # CI tracks the gap; remove from this list when cross-interface
+  # detection lands.
+  set(FORTRAN_TESTS_PURE_SKIP_KNOWN_FAILING
+    mp-pure-only.f90
+    mp-elemental-only.f90
+  )
+
+  foreach(test_source IN LISTS FORTRAN_TESTS_PURE_SKIP_SOURCES)
+    get_filename_component(test_base_name ${test_source} NAME_WLE)
+    get_filename_component(test_lang ${test_source} LAST_EXT)
+    set(_inst_output ${CMAKE_BINARY_DIR}/${test_base_name}.inst${test_lang})
+    string(REPLACE "f90" "F90" _inst_output "${_inst_output}")
+
+    add_test(NAME instrument_${test_source}
+      COMMAND
+        ./${CMAKE_INSTALL_BINDIR}/saltfm
+        ${CMAKE_SOURCE_DIR}/tests/fortran/${test_source}
+    )
+    set(_required_files
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm"
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm")
+    set_tests_properties(instrument_${test_source}
+      PROPERTIES
+      REQUIRED_FILES "${_required_files}"
+      ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
+      PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
+    )
+
+    add_test(NAME check_no_tau_${test_source}
+      COMMAND ${CMAKE_COMMAND} -E cat ${_inst_output}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(check_no_tau_${test_source}
+      PROPERTIES
+      FAIL_REGULAR_EXPRESSION "tauProfileTimer;TAU_PROFILE"
+      DEPENDS instrument_${test_source}
+    )
+    if(test_source IN_LIST FORTRAN_TESTS_PURE_SKIP_KNOWN_FAILING)
+      set_tests_properties(check_no_tau_${test_source}
+        PROPERTIES WILL_FAIL TRUE)
+    endif()
+  endforeach()
 
   set(SALT_FORTRAN_COMPILERS_TO_TEST gfortran flang-new)
   foreach(compiler IN LISTS SALT_FORTRAN_COMPILERS_TO_TEST)

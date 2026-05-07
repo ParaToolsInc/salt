@@ -281,13 +281,57 @@ namespace salt::fortran {
                 verboseStream() << "Enter main program: " << mainProgramName_ << "\n";
             }
 
+            // Returns true when the prefix list marks the subprogram as
+            // pure or elemental.  Includes IMPURE ELEMENTAL: the per-element
+            // dispatch that elemental procedures see when applied to array
+            // arguments would otherwise spawn one TAU timer call per element,
+            // drowning real signal.  Issue #36 tracks the design for actually
+            // instrumenting these.
+            //
+            // Limitation: the F2018 R1538 `module procedure foo ... end
+            // procedure foo` form carries no prefix list of its own
+            // (MpSubprogramStmt is just a Name); pureness lives on the
+            // declaration in the parent module's interface, which the
+            // plugin does not currently cross-reference.  The
+            // `module pure function foo` form (parsed as a regular
+            // FunctionSubprogram with `Module` + `Pure` prefixes) is
+            // detected here.
+            static bool prefixSkipsInstrumentation(const std::list<Fortran::parser::PrefixSpec> &prefixes) {
+                for (const auto &p : prefixes) {
+                    if (std::holds_alternative<Fortran::parser::PrefixSpec::Pure>(p.u) ||
+                        std::holds_alternative<Fortran::parser::PrefixSpec::Elemental>(p.u)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // Emit a non-suppressible note that a pure or elemental
+            // subprogram is being skipped.  Standard-conforming TAU
+            // instrumentation cannot be injected into a pure procedure
+            // because the macros declare `integer, save :: tauProfileTimer(2)`,
+            // and SAVE is forbidden inside a pure procedure (F2018 C1599).
+            // Elemental procedures are skipped to avoid per-element timer
+            // overhead.
+            void notePureOrElementalSkip(const std::string &name, const Fortran::parser::CharBlock &source) const {
+                const auto pos = locationFromSource(parsing, source, false);
+                const std::string filePath = pos ? *pos->path : std::string{"<unknown>"};
+                const int line = pos ? pos->line : 0;
+                llvm::errs() << "[SALT] " << filePath << ":" << line << ": note: "
+                        << "skipping instrumentation of pure or elemental procedure '" << name
+                        << "'. Track issue #36.\n";
+            }
+
             bool Pre(const Fortran::parser::SubroutineStmt &subroutineStmt) {
                 isInMainProgram_ = false;
                 const auto &name = std::get<Fortran::parser::Name>(subroutineStmt.t);
                 subprogramName_ = name.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
                 verboseStream() << "Enter Subroutine: " << subprogramName_ << "\n";
-                if (!shouldInstrumentSubprogram(subprogramName_)) {
+                if (prefixSkipsInstrumentation(std::get<std::list<Fortran::parser::PrefixSpec> >(subroutineStmt.t))) {
+                    notePureOrElementalSkip(subprogramName_, name.source);
+                    skipInstrumentSubprogram_ = true;
+                } else if (!shouldInstrumentSubprogram(subprogramName_)) {
                     verboseStream() << "Skipping instrumentation of " << subprogramName_ <<
                             " due to selective instrumentation\n";
                     skipInstrumentSubprogram_ = true;
@@ -309,7 +353,10 @@ namespace salt::fortran {
                 subprogramName_ = name.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(name.source)->first.line;
                 verboseStream() << "Enter Function: " << subprogramName_ << "\n";
-                if (!shouldInstrumentSubprogram(subprogramName_)) {
+                if (prefixSkipsInstrumentation(std::get<std::list<Fortran::parser::PrefixSpec> >(functionStmt.t))) {
+                    notePureOrElementalSkip(subprogramName_, name.source);
+                    skipInstrumentSubprogram_ = true;
+                } else if (!shouldInstrumentSubprogram(subprogramName_)) {
                     verboseStream() << "Skipping instrumentation of " << subprogramName_ <<
                             " due to selective instrumentation\n";
                     skipInstrumentSubprogram_ = true;
