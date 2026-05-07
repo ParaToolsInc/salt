@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- macOS build support and LLVM 22 added to the CI test matrix; bumps
+  `.VERSION` to 0.4.0 and makes `cparse-llvm --version` report the SALT
+  version (previously only the LLVM banner)
+  ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman).
+- F2018 separate-module-procedure (R1538) support in the Flang plugin,
+  including pure/elemental skipping for the body form whose attributes
+  live on the parent module's interface
+  ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman):
+  - [#33](https://github.com/ParaToolsInc/salt/issues/33) - regression
+    coverage confirming Fortran 2008 submodule procedures are
+    instrumented in submodule bodies and that the parent module's
+    bodyless interface declarations remain untouched.
+  - [#58](https://github.com/ParaToolsInc/salt/issues/58) - pure and
+    elemental detection on separate-module-procedure bodies
+    (`module procedure foo ... end procedure foo`) via the resolved
+    Symbol, including the cross-`.mod`-file case. Closes the body-form
+    branch of #36; calling-side handling still TODO.
+- Fortran instrumentor robustness fixes
+  ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman):
+  - [#31](https://github.com/ParaToolsInc/salt/issues/31) - no longer
+    aborts when a labeled CONTINUE terminates a label-DO at the end of
+    a procedure body; the body's end line is now captured from the
+    wrapping End statement instead of the final construct.
+  - [#39](https://github.com/ParaToolsInc/salt/issues/39) - handles
+    multi-line `&` continuations inside `if (...) return` statements.
+  - Instruments `return <expr>` (the obsolescent F2018 Annex B.3
+    alternate-return form) so existing TAU timer starts get matching
+    stops. Refs #32.
+- TAU timer source-range field now emits real start/end columns for
+  both fparse-llvm (PDT-style inclusive last-char convention) and
+  cparse-llvm (signature start to body close brace), instead of the
+  previously hardcoded `,1}` placeholders
+  ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman,
+  closes [#49](https://github.com/ParaToolsInc/salt/issues/49)).
+- Regression coverage for cparse-llvm's bodyless `FunctionDecl` handling
+  (forward declarations, pure-virtual methods); paired with a stub TU
+  so the instrumented binary also links and runs end-to-end
+  ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman,
+  refs [#53](https://github.com/ParaToolsInc/salt/issues/53)).
 - LLVM 20, 21, and 22 build compatibility while preserving LLVM 19 support,
   with the CI matrix expanded against `salt-dev:1.3` (LLVM 19), `:1.4`
   (LLVM 20), and `:1.5` (LLVM 21), and a `spack concretize` smoketest
@@ -31,11 +70,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman, closes
   [#44](https://github.com/ParaToolsInc/salt/issues/44) reported by
   @nchaimov).
-- Regression test for Fortran 2008 submodule instrumentation, confirming
-  that TAU calls land in submodule procedure bodies and that the parent
-  module's bodyless interface declarations remain untouched
-  ([#45](https://github.com/ParaToolsInc/salt/pull/45) by @zbeekman, closes
-  [#33](https://github.com/ParaToolsInc/salt/issues/33)).
 - Project version is now derived from a committed `.VERSION` file plus
   `git describe` build metadata, replacing hardcoded version constants
   that had drifted to `0.2` after v0.3.0 shipped. A vendored `.githooks/`
