@@ -554,10 +554,29 @@ namespace salt::fortran {
                     const int endCol = containsLine > 0
                         ? 1
                         : (isInMainProgram_ ? mainProgramEndCol_ : subProgramEndCol_);
+                    // Implicit main programs (no program-stmt; F2018 R1101
+                    // makes program-stmt optional) have no source line or
+                    // name to anchor the timer to; Post(ProgramStmt) never
+                    // fires and mainProgramName_/mainProgramLine_ stay
+                    // default-initialised.  Synthesize a fallback name
+                    // combining the input file's basename with a fixed
+                    // `_implicit_main_` marker (won't collide with any
+                    // user symbol since `-` is not a valid Fortran ident
+                    // character), and use the first-executable-stmt line.
+                    std::string procName;
+                    int procStartLine;
+                    if (isInMainProgram_ && mainProgramName_.empty()) {
+                        procName = std::filesystem::path(startLoc.sourceFile->path()).stem().string()
+                                + "._implicit_main_";
+                        procStartLine = startLoc.line;
+                    } else {
+                        procName = isInMainProgram_ ? mainProgramName_ : subprogramName_;
+                        procStartLine = isInMainProgram_ ? mainProgramLine_ : subProgramLine_;
+                    }
                     std::stringstream ss;
-                    ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
+                    ss << procName;
                     ss << " [{" << startLoc.sourceFile->path() << "} {";
-                    ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
+                    ss << procStartLine;
                     ss << "," << startCol << "}-{";
                     ss << endLine + 1;
                     ss << "," << endCol << "}]";

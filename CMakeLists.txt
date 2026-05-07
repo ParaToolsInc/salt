@@ -1052,6 +1052,7 @@ if(TEST_FORTRAN)
     if-stmt-edge.f90
     if-stmt-continuation.f90
     if-stmt-labeled.f90
+    implicit-main.f90
     alternate-return.f90
     label-do-at-end.f90
     internal-func.f90
@@ -1105,6 +1106,24 @@ if(TEST_FORTRAN)
     PROPERTIES
     PASS_REGULAR_EXPRESSION "[\n\r]+[\t ]+&add "
     DEPENDS instrument_internal-func.f90
+  )
+
+  # Implicit main programs (no program-stmt) have no name or source
+  # line to attach to the timer.  The plugin synthesizes a fallback
+  # name combining the input file's basename with a fixed
+  # `_implicit_main_` marker, and uses the first-executable-stmt line
+  # for the timer-name source range.  Pin both: the timer name must
+  # contain `implicit-main._implicit_main_`, and the source-range
+  # field must not start at line 0.
+  add_test(NAME check_implicit_main_timer_name
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/implicit-main.inst.F90
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+  set_tests_properties(check_implicit_main_timer_name
+    PROPERTIES
+    PASS_REGULAR_EXPRESSION "implicit-main\\._implicit_main_"
+    FAIL_REGULAR_EXPRESSION "\\[\\{[^}]*\\} \\{0,"
+    DEPENDS instrument_implicit-main.f90
   )
 
   # Companion tests: the alternate-return values 1, 2, 3 must each

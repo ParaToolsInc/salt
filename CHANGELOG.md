@@ -38,6 +38,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     the synthesized `if (cond) then` block (F2018 R601/R863), so any
     `goto N` references in the surrounding procedure continue to
     resolve.
+  - Implicit main programs (no `program` statement; F2018 R1101 makes
+    the program-stmt optional) get a synthesized timer name combining
+    the input file's basename with a fixed `._implicit_main_` marker,
+    and a real start line from the first executable statement,
+    instead of the previous empty name and `{0,...}` source range.
 - TAU timer source-range field now emits real start/end columns for
   both fparse-llvm (PDT-style inclusive last-char convention) and
   cparse-llvm (signature start to body close brace), instead of the
