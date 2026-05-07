@@ -145,13 +145,25 @@ namespace salt::fortran {
 
     class IfReturnStmtInstrumentationPoint final : public InstrumentationPoint {
     public:
-        explicit IfReturnStmtInstrumentationPoint(const int line, const int conditionalColumn) : InstrumentationPoint(
-                InstrumentationPointType::IF_RETURN, line, InstrumentationLocation::REPLACE),
-            conditionalColumn_(conditionalColumn) {
+        // Replaces the physical source range [startLine, endLine] (covering
+        // a possibly continuation-spanned `if (<cond>) return`) with a
+        // multi-line `if (<cond>) then ... end if` block that wraps the
+        // TAU stop-timer call before the return.
+        //
+        // `conditionText` is the cooked-source text of the logical
+        // expression (line continuations resolved, comments stripped).
+        IfReturnStmtInstrumentationPoint(const int startLine, const int endLine,
+                                         std::string conditionText) : InstrumentationPoint(
+                InstrumentationPointType::IF_RETURN, startLine, InstrumentationLocation::REPLACE),
+            endLine_(endLine), conditionText_(std::move(conditionText)) {
         }
 
-        [[nodiscard]] int conditionalColumn() const {
-            return conditionalColumn_;
+        [[nodiscard]] int endLine() const {
+            return endLine_;
+        }
+
+        [[nodiscard]] const std::string &conditionText() const {
+            return conditionText_;
         }
 
         [[nodiscard]] std::string toString() const override;
@@ -160,7 +172,8 @@ namespace salt::fortran {
                                                         const std::string &lineText) const override;
 
     private:
-        const int conditionalColumn_;
+        const int endLine_;
+        const std::string conditionText_;
     };
 }
 

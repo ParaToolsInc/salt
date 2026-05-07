@@ -98,10 +98,12 @@ namespace salt::fortran {
                 }
             }
 
-            void addIfReturnStmtInstrumentation(const int end_line, const int conditional_column) {
+            void addIfReturnStmtInstrumentation(const int start_line, const int end_line,
+                                                std::string condition_text) {
                 if (shouldInstrument()) {
                     instrumentationPoints_.emplace_back(
-                        std::make_unique<IfReturnStmtInstrumentationPoint>(end_line, conditional_column));
+                        std::make_unique<IfReturnStmtInstrumentationPoint>(start_line, end_line,
+                                                                           std::move(condition_text)));
                 }
             }
 
@@ -330,6 +332,12 @@ namespace salt::fortran {
 
             // A ReturnStmt does not have a source, so we instead need to get access to the wrapper Statement that does.
             // Here we get the ReturnStmt through ExecutableConstruct -> Statement<ActionStmt> -> Indirection<ReturnStmt>
+            //
+            // The same wrapper Statement<ActionStmt> covers an `if (<cond>) return` IfStmt.  Detecting the
+            // if-return form here (rather than in Pre(IfStmt&)) gives us access to the wrapper's source
+            // CharBlock, which spans the full physical extent of the if-stmt -- including any `&` line
+            // continuations inside the condition or between the condition and the action.  The cooked
+            // text of that range (and of the embedded ScalarLogicalExpr) is continuation-free.
             bool Pre(const Fortran::parser::ExecutableConstruct &execConstruct) {
                 if (const auto actionStmt = std::get_if<Fortran::parser::Statement<Fortran::parser::ActionStmt> >(
                     &execConstruct.u)) {
@@ -339,35 +347,36 @@ namespace salt::fortran {
                         const int returnLine{returnPos.value().line};
                         verboseStream() << "Return statement at " << returnLine << "\n";
                         addReturnStmtInstrumentation(returnLine);
+                    } else if (const auto ifInd = std::get_if<Fortran::common::Indirection<Fortran::parser::IfStmt> >(
+                        &actionStmt->statement.u)) {
+                        const Fortran::parser::IfStmt &ifStmt{ifInd->value()};
+                        const auto &innerAction{
+                            std::get<Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> >(ifStmt.t)
+                        };
+                        if (std::holds_alternative<Fortran::common::Indirection<Fortran::parser::ReturnStmt> >(
+                            innerAction.statement.u)) {
+                            // The wrapping Statement<ActionStmt>'s source covers the entire `if (...) return`
+                            // including continuations.  Use it to compute the physical line range to replace.
+                            const auto startPos{
+                                locationFromSource(parsing, actionStmt->source, false).value()
+                            };
+                            const auto endPos{
+                                locationFromSource(parsing, actionStmt->source, true).value()
+                            };
+                            // Pull the cooked-source text of the logical condition.  CharBlock::ToString()
+                            // yields the post-continuation, comment-stripped representation that flang's
+                            // parser already worked with, so the synthesized replacement is syntactically
+                            // sound regardless of how the user wrote the condition physically.
+                            const std::string conditionText{
+                                std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source.
+                                ToString()
+                            };
+                            verboseStream() << "If-return spans lines " << startPos.line << "-" << endPos.line
+                                    << ", condition: " << conditionText << "\n";
+                            // TODO handle return <value> case
+                            addIfReturnStmtInstrumentation(startPos.line, endPos.line, conditionText);
+                        }
                     }
-                }
-                return true;
-            }
-
-            bool Pre(const Fortran::parser::IfStmt &ifStmt) {
-                if (const auto &ifAction{
-                        std::get<Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> >(ifStmt.t)
-                    };
-                    std::holds_alternative<Fortran::common::Indirection<
-                        Fortran::parser::ReturnStmt> >(ifAction.statement.u)) {
-                    const auto startPos{
-                        locationFromSource(parsing,
-                                           std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().
-                                           source,
-                                           false).value()
-                    };
-                    const auto endPos{
-                        locationFromSource(parsing,
-                                           std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().
-                                           source,
-                                           true).value()
-                    };
-                    verboseStream() << "If-return, conditional: (" << startPos.line << "," << startPos.column << ") - "
-                            << "(" << endPos.line << "," << endPos.column << ")\n";
-                    // TODO handle return <value> case
-                    // TODO handle multi-line
-                    // TODO handle line continuation if too long
-                    addIfReturnStmtInstrumentation(startPos.line, endPos.column);
                 }
                 return true;
             }
@@ -450,11 +459,31 @@ namespace salt::fortran {
                     ++instIter;
                 }
 
-                // Then, process instrumentation points that REPLACE this line.
+                // Then, process instrumentation points that REPLACE this line.  An
+                // IfReturnStmtInstrumentationPoint can span multiple physical lines
+                // when the if-stmt's condition is split via `&` continuation; in that
+                // case we must consume input lines through endLine() so the original
+                // continuation tail is not echoed after our synthesized replacement.
                 while (instIter != instPts.cend() && (*instIter)->line() == lineNum && (*instIter)->location() ==
                        InstrumentationLocation::REPLACE) {
                     outputStream << lineDirective(lineNum, inputFilePath) << "\n";
                     outputStream << (*instIter)->instrumentationString(instMap, lineText) << "\n";
+                    int replacedThroughLine{lineNum};
+                    // SALT links against LLVM with -fno-rtti, so dynamic_cast is
+                    // unavailable.  Use the instrumentation-type tag to recover the
+                    // concrete subclass.
+                    if ((*instIter)->instrumentationType() == InstrumentationPointType::IF_RETURN) {
+                        const auto *ifReturnPt =
+                                static_cast<const IfReturnStmtInstrumentationPoint *>(instIter->get());
+                        replacedThroughLine = ifReturnPt->endLine();
+                    }
+                    while (lineNum < replacedThroughLine) {
+                        std::string discardedLine;
+                        if (!std::getline(inputStream, discardedLine)) {
+                            break;
+                        }
+                        ++lineNum;
+                    }
                     lineWasInstrumentedAfter = true;
                     shouldOutputLine = false;
                     ++instIter;

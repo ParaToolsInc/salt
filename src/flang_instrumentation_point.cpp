@@ -102,16 +102,17 @@ std::string salt::fortran::ProcedureBeginInstrumentationPoint::instrumentationSt
 std::string salt::fortran::IfReturnStmtInstrumentationPoint::toString() const {
     std::stringstream ss;
     ss << InstrumentationPoint::toString();
-    ss << conditionalColumn() << "\t";
+    ss << endLine() << "\t";
+    ss << "\"" << conditionText() << "\"\t";
     return ss.str();
 }
 
 std::string salt::fortran::IfReturnStmtInstrumentationPoint::instrumentationString(
-    const InstrumentationMap &instMap, const std::string &lineText) const {
+    const InstrumentationMap &instMap, [[maybe_unused]] const std::string &lineText) const {
     std::stringstream ss;
-    ss << lineText.substr(0, conditionalColumn()) << " then\n";
+    ss << "      if (" << conditionText() << ") then\n";
     ss << InstrumentationPoint::instrumentationString(instMap, lineText) << "\n";
-    ss << "      return\n";
-    ss << "      endif\n";
+    ss << "        return\n";
+    ss << "      end if\n";
     return ss.str();
 }
