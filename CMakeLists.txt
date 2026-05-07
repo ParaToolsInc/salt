@@ -541,6 +541,8 @@ set(TESTS_LIST
   hello.c
   1d.c
   c11test.cpp
+  forward_decl.c
+  pure_virtual.cpp
 )
 
 include(CTest)
@@ -594,6 +596,33 @@ endfunction()
 foreach(test_source IN LISTS TESTS_LIST)
   add_instrumentor_test(${test_source})
 endforeach()
+
+# Issue #53 regression: bodyless FunctionDecls must be skipped, not
+# instrumented or crashed-on. Each check_<name>_skips_bodyless test
+# reads the .inst output and verifies (a) main was instrumented
+# (PASS_REGULAR_EXPRESSION) and (b) no TAU_PROFILE_TIMER mentions
+# the symbols whose getBody() returns nullptr (FAIL_REGULAR_EXPRESSION).
+# Symbol names are deliberately distinct from any text used in the
+# fixture's comment block so the FAIL regex cannot false-positive on
+# documentation strings.
+add_test(NAME check_forward_decl_skips_bodyless
+  COMMAND ${CMAKE_COMMAND} -E cat forward_decl.inst.c)
+set_tests_properties(check_forward_decl_skips_bodyless
+  PROPERTIES
+  DEPENDS instrument_forward_decl_exists
+  PASS_REGULAR_EXPRESSION "TAU_PROFILE_SET_NODE"
+  FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER[^\n]*undefined_in_tu"
+)
+
+add_test(NAME check_pure_virtual_skips_bodyless
+  COMMAND ${CMAKE_COMMAND} -E cat pure_virtual.inst.cpp)
+set_tests_properties(check_pure_virtual_skips_bodyless
+  PROPERTIES
+  DEPENDS instrument_pure_virtual_exists
+  PASS_REGULAR_EXPRESSION "TAU_PROFILE_SET_NODE"
+  FAIL_REGULAR_EXPRESSION
+    "TAU_PROFILE_TIMER[^\n]*Abstract::unimplemented;TAU_PROFILE_TIMER[^\n]*undefined_free_fn"
+)
 
 # Selective Instrumentation File (SIF) tests.
 #
