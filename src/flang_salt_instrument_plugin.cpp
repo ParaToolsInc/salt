@@ -45,6 +45,8 @@ limitations under the License.
 #include "flang/Parser/parsing.h"
 #include "flang/Parser/source.h"
 #include "flang/Common/indirection.h"
+#include "flang/Semantics/symbol.h"
+#include "flang/Evaluate/tools.h"
 
 #include "flang_instrumentation_constants.hpp"
 #include "selectfile.hpp"
@@ -288,14 +290,13 @@ namespace salt::fortran {
             // drowning real signal.  Issue #36 tracks the design for actually
             // instrumenting these.
             //
-            // Limitation: the F2018 R1538 `module procedure foo ... end
-            // procedure foo` form carries no prefix list of its own
-            // (MpSubprogramStmt is just a Name); pureness lives on the
-            // declaration in the parent module's interface, which the
-            // plugin does not currently cross-reference.  The
-            // `module pure function foo` form (parsed as a regular
-            // FunctionSubprogram with `Module` + `Pure` prefixes) is
-            // detected here.
+            // Separate-module-procedure bodies (F2018 R1538 `module
+            // procedure foo ... end procedure foo`) carry no prefix list
+            // of their own; pure/elemental attributes live on the
+            // matching declaration in the parent module's interface.
+            // Those bodies are handled in Pre(MpSubprogramStmt) via the
+            // resolved Symbol (attrs are inherited from the interface
+            // during semantics, including across .mod-file boundaries).
             static bool prefixSkipsInstrumentation(const std::list<Fortran::parser::PrefixSpec> &prefixes) {
                 for (const auto &p : prefixes) {
                     if (std::holds_alternative<Fortran::parser::PrefixSpec::Pure>(p.u) ||
@@ -304,6 +305,22 @@ namespace salt::fortran {
                     }
                 }
                 return false;
+            }
+
+            // Returns true when the resolved Symbol is pure or elemental.
+            // Used for separate-module-procedure bodies whose prefix lives
+            // on the parent module's interface declaration.  Flang's
+            // semantic phase OR's the interface's attrs into the body
+            // symbol's attrs (resolve-names.cpp BeginMpSubprogram), so
+            // these helpers see PURE/ELEMENTAL even when the interface
+            // lives in a separately-compiled .mod file.  Mirrors the
+            // IMPURE ELEMENTAL handling of prefixSkipsInstrumentation.
+            static bool symbolSkipsInstrumentation(const Fortran::semantics::Symbol *symbol) {
+                if (!symbol) {
+                    return false;
+                }
+                return Fortran::semantics::IsPureProcedure(*symbol) ||
+                       Fortran::semantics::IsElementalProcedure(*symbol);
             }
 
             // Emit a non-suppressible note that a pure or elemental
@@ -376,14 +393,18 @@ namespace salt::fortran {
             // Header statement for a separate module procedure body
             // (`module procedure foo` form, F2018 R1539).  Mirrors the
             // SubroutineStmt / FunctionStmt handlers: capture the name and
-            // the line of the procedure declaration, and honour selective
-            // instrumentation.
+            // the line of the procedure declaration, honour selective
+            // instrumentation, and skip pure/elemental bodies whose
+            // attributes are declared on the parent module's interface.
             bool Pre(const Fortran::parser::MpSubprogramStmt &mpStmt) {
                 isInMainProgram_ = false;
                 subprogramName_ = mpStmt.v.ToString();
                 subProgramLine_ = parsing->allCooked().GetSourcePositionRange(mpStmt.v.source)->first.line;
                 verboseStream() << "Enter Module Procedure: " << subprogramName_ << "\n";
-                if (!shouldInstrumentSubprogram(subprogramName_)) {
+                if (symbolSkipsInstrumentation(mpStmt.v.symbol)) {
+                    notePureOrElementalSkip(subprogramName_, mpStmt.v.source);
+                    skipInstrumentSubprogram_ = true;
+                } else if (!shouldInstrumentSubprogram(subprogramName_)) {
                     verboseStream() << "Skipping instrumentation of " << subprogramName_ <<
                             " due to selective instrumentation\n";
                     skipInstrumentSubprogram_ = true;

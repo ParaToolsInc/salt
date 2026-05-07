@@ -1097,17 +1097,6 @@ if(TEST_FORTRAN)
     mp-elemental-only.f90
   )
 
-  # Sources whose check_no_tau_<src> test currently fails because the
-  # plugin does not yet detect pure / elemental attributes that live
-  # on a separate-module-procedure's interface declaration in the
-  # parent module (issue #36 limitation).  Marked WILL_FAIL=TRUE so
-  # CI tracks the gap; remove from this list when cross-interface
-  # detection lands.
-  set(FORTRAN_TESTS_PURE_SKIP_KNOWN_FAILING
-    mp-pure-only.f90
-    mp-elemental-only.f90
-  )
-
   foreach(test_source IN LISTS FORTRAN_TESTS_PURE_SKIP_SOURCES)
     get_filename_component(test_base_name ${test_source} NAME_WLE)
     get_filename_component(test_lang ${test_source} LAST_EXT)
@@ -1138,10 +1127,6 @@ if(TEST_FORTRAN)
       FAIL_REGULAR_EXPRESSION "tauProfileTimer;TAU_PROFILE"
       DEPENDS instrument_${test_source}
     )
-    if(test_source IN_LIST FORTRAN_TESTS_PURE_SKIP_KNOWN_FAILING)
-      set_tests_properties(check_no_tau_${test_source}
-        PROPERTIES WILL_FAIL TRUE)
-    endif()
   endforeach()
 
   set(SALT_FORTRAN_COMPILERS_TO_TEST gfortran flang-new)

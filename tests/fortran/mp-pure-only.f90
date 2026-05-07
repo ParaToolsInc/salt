@@ -1,11 +1,9 @@
 ! Pure separate module procedure: PURE attribute lives on the
 ! interface declaration in the parent module; the body in the
-! submodule is a bare `module procedure foo`.  SALT does not yet
-! cross-reference the interface to detect pureness here, so the
-! body currently DOES receive TAU instrumentation that gfortran
-! will reject (SAVE in pure procedure).  The companion
-! check_no_tau_mp-pure-only.f90 ctest is wired with WILL_FAIL=TRUE
-! so this gap is tracked in CI without going red.  See issue #36.
+! submodule is a bare `module procedure foo`.  The plugin recovers
+! the attribute from the body's resolved Symbol (flang propagates
+! the interface's attrs into the body symbol during semantics, also
+! across .mod-file boundaries) and skips instrumentation.
 
 module mp_pure_only_iface
   implicit none
