@@ -34,6 +34,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Instruments `return <expr>` (the obsolescent F2018 Annex B.3
     alternate-return form) so existing TAU timer starts get matching
     stops. Refs #32.
+  - Numeric statement labels on `if (cond) return` are preserved on
+    the synthesized `if (cond) then` block (F2018 R601/R863), so any
+    `goto N` references in the surrounding procedure continue to
+    resolve.
 - TAU timer source-range field now emits real start/end columns for
   both fparse-llvm (PDT-style inclusive last-char convention) and
   cparse-llvm (signature start to body close brace), instead of the
