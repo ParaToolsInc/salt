@@ -1065,23 +1065,23 @@ if(TEST_FORTRAN)
     DEPENDS instrument_internal-func.f90
   )
 
-  # Companion test: when running the alternate-return source through
-  # SALT, the plugin must emit the issue-#32 informational note to
-  # stderr for both flavors -- bare `return <expr>` and
-  # `if (cond) return <expr>`.  CMake matches all listed
-  # PASS_REGULAR_EXPRESSION patterns, so both message variants must
-  # appear in the output.
-  add_test(NAME warn_alternate-return.f90
-    COMMAND
-      ./${CMAKE_INSTALL_BINDIR}/saltfm
-      ${CMAKE_SOURCE_DIR}/tests/fortran/alternate-return.f90
-  )
-  set_tests_properties(warn_alternate-return.f90
-    PROPERTIES
-    PASS_REGULAR_EXPRESSION
-      "instrumenting .if .<cond>. return <expr>.;instrumenting .return <expr>."
-    DEPENDS instrument_alternate-return.f90
-  )
+  # Companion tests: the alternate-return values 1, 2, 3 must each
+  # survive instrumentation (preserved verbatim in the synthesized
+  # if-then-endif blocks for the if-stmt forms, and untouched on the
+  # bare-return line).  Each value pins its own ctest because CMake's
+  # PASS_REGULAR_EXPRESSION uses any-of semantics on a `;`-separated
+  # list, not all-of.
+  foreach(alt_value 1 2 3)
+    add_test(NAME check_alternate-return-value-${alt_value}
+      COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/alternate-return.inst.F90
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(check_alternate-return-value-${alt_value}
+      PROPERTIES
+      PASS_REGULAR_EXPRESSION "return ${alt_value}"
+      DEPENDS instrument_alternate-return.f90
+    )
+  endforeach()
 
   # Per-form skip checks: each minimal source contains exactly one
   # pure / elemental / impure-elemental / module-procedure body and
