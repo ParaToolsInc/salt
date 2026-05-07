@@ -99,11 +99,13 @@ namespace salt::fortran {
             }
 
             void addIfReturnStmtInstrumentation(const int start_line, const int end_line,
-                                                std::string condition_text) {
+                                                std::string condition_text,
+                                                std::string return_expr_text) {
                 if (shouldInstrument()) {
                     instrumentationPoints_.emplace_back(
                         std::make_unique<IfReturnStmtInstrumentationPoint>(start_line, end_line,
-                                                                           std::move(condition_text)));
+                                                                           std::move(condition_text),
+                                                                           std::move(return_expr_text)));
                 }
             }
 
@@ -341,8 +343,16 @@ namespace salt::fortran {
             bool Pre(const Fortran::parser::ExecutableConstruct &execConstruct) {
                 if (const auto actionStmt = std::get_if<Fortran::parser::Statement<Fortran::parser::ActionStmt> >(
                     &execConstruct.u)) {
-                    if (std::holds_alternative<Fortran::common::Indirection<Fortran::parser::ReturnStmt> >(
-                        actionStmt->statement.u)) {
+                    if (const auto retInd =
+                            std::get_if<Fortran::common::Indirection<Fortran::parser::ReturnStmt> >(
+                                &actionStmt->statement.u)) {
+                        // Both plain `return` and the obsolescent alternate-return
+                        // form `return <scalar-int-expr>` are handled identically:
+                        // we inject TAU_PROFILE_STOP on the line before, and the
+                        // user's `return [<expr>]` is echoed unchanged.  Issue #32.
+                        if (retInd->value().v.has_value()) {
+                            noteAlternateReturn(actionStmt->source, /*insideIfStmt=*/false);
+                        }
                         const std::optional returnPos{locationFromSource(parsing, actionStmt->source, false)};
                         const int returnLine{returnPos.value().line};
                         verboseStream() << "Return statement at " << returnLine << "\n";
@@ -353,8 +363,9 @@ namespace salt::fortran {
                         const auto &innerAction{
                             std::get<Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> >(ifStmt.t)
                         };
-                        if (std::holds_alternative<Fortran::common::Indirection<Fortran::parser::ReturnStmt> >(
-                            innerAction.statement.u)) {
+                        if (const auto innerRet =
+                                std::get_if<Fortran::common::Indirection<Fortran::parser::ReturnStmt> >(
+                                    &innerAction.statement.u)) {
                             // The wrapping Statement<ActionStmt>'s source covers the entire `if (...) return`
                             // including continuations.  Use it to compute the physical line range to replace.
                             const auto startPos{
@@ -371,14 +382,47 @@ namespace salt::fortran {
                                 std::get<Fortran::parser::ScalarLogicalExpr>(ifStmt.t).thing.thing.value().source.
                                 ToString()
                             };
+                            // Alternate-return form `if (cond) return <expr>`: capture
+                            // the int-expression's cooked text so the synthesized
+                            // `if-then-endif` replays `return <expr>` faithfully.
+                            // Empty text means a plain `return`. Issue #32.
+                            std::string returnExprText;
+                            if (innerRet->value().v.has_value()) {
+                                returnExprText =
+                                    innerRet->value().v.value().thing.thing.value().source.ToString();
+                                noteAlternateReturn(actionStmt->source, /*insideIfStmt=*/true);
+                            }
                             verboseStream() << "If-return spans lines " << startPos.line << "-" << endPos.line
-                                    << ", condition: " << conditionText << "\n";
-                            // TODO handle return <value> case
-                            addIfReturnStmtInstrumentation(startPos.line, endPos.line, conditionText);
+                                    << ", condition: " << conditionText
+                                    << (returnExprText.empty() ? "" : ", return expr: " + returnExprText) << "\n";
+                            addIfReturnStmtInstrumentation(startPos.line, endPos.line, conditionText,
+                                                           returnExprText);
                         }
                     }
                 }
                 return true;
+            }
+
+            // Informational note that the user's source uses the obsolescent
+            // alternate-return form (`return <scalar-int-expr>`, optionally
+            // inside `if (cond)`).  Listed under Fortran 2018 Annex B.3
+            // "Obsolescent features"; future revisions of the standard may
+            // delete it.  SALT instruments these statements correctly today
+            // (issue #32 closed); the note exists so users know to migrate
+            // away from the form, not because instrumentation skipped it.
+            //
+            // Emitted to stderr at always-on severity (not gated on verbose)
+            // so it is visible during a normal build.
+            void noteAlternateReturn(const Fortran::parser::CharBlock &source, const bool insideIfStmt) const {
+                const auto pos = locationFromSource(parsing, source, false);
+                const std::string filePath = pos ? *pos->path : std::string{"<unknown>"};
+                const int line = pos ? pos->line : 0;
+                llvm::errs() << "[SALT] " << filePath << ":" << line << ": note: "
+                        << (insideIfStmt
+                                ? "instrumenting `if (<cond>) return <expr>`, "
+                                : "instrumenting `return <expr>`, ")
+                        << "an obsolescent alternate-return form "
+                        << "(Fortran 2018 Annex B.3); consider replacing it with structured control flow.\n";
             }
 
         private:

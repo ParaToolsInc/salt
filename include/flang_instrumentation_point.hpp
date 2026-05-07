@@ -146,16 +146,21 @@ namespace salt::fortran {
     class IfReturnStmtInstrumentationPoint final : public InstrumentationPoint {
     public:
         // Replaces the physical source range [startLine, endLine] (covering
-        // a possibly continuation-spanned `if (<cond>) return`) with a
-        // multi-line `if (<cond>) then ... end if` block that wraps the
-        // TAU stop-timer call before the return.
+        // a possibly continuation-spanned `if (<cond>) return [<expr>]`)
+        // with a multi-line `if (<cond>) then ... end if` block that wraps
+        // the TAU stop-timer call before the return.
         //
         // `conditionText` is the cooked-source text of the logical
         // expression (line continuations resolved, comments stripped).
+        // `returnExprText` is empty for a plain `return`, or the cooked
+        // text of the `<scalar-int-expr>` for the obsolescent alternate-
+        // return form (issue #32).
         IfReturnStmtInstrumentationPoint(const int startLine, const int endLine,
-                                         std::string conditionText) : InstrumentationPoint(
+                                         std::string conditionText,
+                                         std::string returnExprText) : InstrumentationPoint(
                 InstrumentationPointType::IF_RETURN, startLine, InstrumentationLocation::REPLACE),
-            endLine_(endLine), conditionText_(std::move(conditionText)) {
+            endLine_(endLine), conditionText_(std::move(conditionText)),
+            returnExprText_(std::move(returnExprText)) {
         }
 
         [[nodiscard]] int endLine() const {
@@ -166,6 +171,10 @@ namespace salt::fortran {
             return conditionText_;
         }
 
+        [[nodiscard]] const std::string &returnExprText() const {
+            return returnExprText_;
+        }
+
         [[nodiscard]] std::string toString() const override;
 
         [[nodiscard]] std::string instrumentationString(const InstrumentationMap &instMap,
@@ -174,6 +183,7 @@ namespace salt::fortran {
     private:
         const int endLine_;
         const std::string conditionText_;
+        const std::string returnExprText_;
     };
 }
 

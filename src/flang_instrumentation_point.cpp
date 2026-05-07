@@ -104,6 +104,9 @@ std::string salt::fortran::IfReturnStmtInstrumentationPoint::toString() const {
     ss << InstrumentationPoint::toString();
     ss << endLine() << "\t";
     ss << "\"" << conditionText() << "\"\t";
+    if (!returnExprText().empty()) {
+        ss << "\"return " << returnExprText() << "\"\t";
+    }
     return ss.str();
 }
 
@@ -112,7 +115,11 @@ std::string salt::fortran::IfReturnStmtInstrumentationPoint::instrumentationStri
     std::stringstream ss;
     ss << "      if (" << conditionText() << ") then\n";
     ss << InstrumentationPoint::instrumentationString(instMap, lineText) << "\n";
-    ss << "        return\n";
+    if (returnExprText().empty()) {
+        ss << "        return\n";
+    } else {
+        ss << "        return " << returnExprText() << "\n";
+    }
     ss << "      end if\n";
     return ss.str();
 }
