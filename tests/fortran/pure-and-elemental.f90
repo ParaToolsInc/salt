@@ -1,16 +1,9 @@
 ! Issue #36 placeholder behaviour: SALT skips pure, elemental, and
 ! impure-elemental procedures.  Pure procedures cannot host the
 ! standard TAU macros because they declare `integer, save ::
-! tauProfileTimer(2)` and SAVE is forbidden in a pure procedure
+! tauProfileTimer(2)`, and SAVE is forbidden in a pure procedure
 ! (Fortran 2018 C1599).  Elemental procedures (pure or impure) are
 ! skipped to avoid spawning one TAU timer call per array element.
-!
-! The plugin emits `[SALT] ... note: skipping instrumentation of
-! pure or elemental procedure ...` for each skipped subprogram; the
-! companion warn_pure-and-elemental.f90 ctest below pins that note
-! for all three forms.
-!
-! Standards-conforming F2018.
 
 module pe_helpers
   implicit none

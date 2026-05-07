@@ -1,9 +1,7 @@
-! Pure separate module procedure: PURE attribute lives on the
-! interface declaration in the parent module; the body in the
-! submodule is a bare `module procedure foo`.  The plugin recovers
-! the attribute from the body's resolved Symbol (flang propagates
-! the interface's attrs into the body symbol during semantics, also
-! across .mod-file boundaries) and skips instrumentation.
+! Pure separate module procedure (F2018 R1538 body form): PURE
+! attribute lives on the interface declaration in the parent module;
+! the body header `module procedure squared` carries no prefix list
+! of its own.  See issue #58.
 
 module mp_pure_only_iface
   implicit none

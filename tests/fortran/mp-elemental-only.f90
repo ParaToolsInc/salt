@@ -1,8 +1,7 @@
-! Elemental separate module procedure: ELEMENTAL attribute lives on
-! the interface in the parent module; body in the submodule is a
-! bare `module procedure foo`.  The plugin skips instrumentation
-! via the body's resolved Symbol (flang propagates the interface's
-! attrs into the body symbol during semantics).
+! Elemental separate module procedure (F2018 R1538 body form):
+! ELEMENTAL attribute lives on the interface in the parent module;
+! the body header `module procedure negate` carries no prefix list
+! of its own.  See issue #58.
 
 module mp_elemental_only_iface
   implicit none

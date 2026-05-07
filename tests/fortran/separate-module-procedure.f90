@@ -1,12 +1,8 @@
-! F2018 separate module procedures: parent module declares the
-! interface and the submodule defines the body using the
-! `module procedure foo ... end procedure foo` form (R1538).  This
-! parses as Fortran::parser::SeparateModuleSubprogram, distinct from
-! the `module function foo ... end function foo` form already
-! exercised by submodule_test.f90.  The plugin must instrument the
-! body just like any other subprogram.
-!
-! Standards-conforming F2018.
+! F2018 separate module procedures, body form (R1538):
+! `module procedure foo ... end procedure foo`.  Companion fixture
+! submodule_test.f90 covers the `module function foo ... end function
+! foo` body form; the two parse to different parse-tree node types
+! and so need separate coverage.
 
 module mp_iface
   implicit none
@@ -40,11 +36,8 @@ contains
     print *, "x*x = ", squared(x)
   end procedure print_squared
 
-  ! Separate module procedure that has its own `contains` section
-  ! with an internal helper, *and* whose execution part ends in a
-  ! labeled CONTINUE just before `contains`.  Stresses both the
-  ! SeparateModuleSubprogram handler and the contains-bound branch
-  ! of captureBodyEndLines.
+  ! Stress: labeled CONTINUE just before `contains`, in a
+  ! separate-module-procedure that itself hosts an internal helper.
   module procedure bumped_sum
     integer :: i
     r = 0
@@ -60,10 +53,8 @@ contains
     end function bump
   end procedure bumped_sum
 
-  ! Separate module procedure whose execution part ends in a
-  ! labeled CONTINUE immediately before the end-procedure
-  ! statement, with no `contains`.  Stresses the end-stmt-bound
-  ! branch on a SeparateModuleSubprogram.
+  ! Stress: labeled CONTINUE immediately before `end procedure`,
+  ! no internal-subprogram section.
   module procedure label_terminated
     integer :: y
     y = x + 1

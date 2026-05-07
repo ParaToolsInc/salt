@@ -1,19 +1,15 @@
-! Edge-case coverage for `if (<cond>) return` instrumentation -- the
-! cases that the plugin handles correctly today.  See
-! tests/fortran/if-stmt-continuation.f90 for the multi-line
-! continuation cases that currently produce invalid Fortran (issue
-! #39, plugin TODOs in flang_salt_instrument_plugin.cpp).
-!
-! Standard-conforming F2008+. Single file, compiled top-to-bottom.
+! Edge-case coverage for `if (<cond>) return` on a single physical
+! line: tight spacing, compound conditions, function-call
+! conditions, nested negation.  Companion fixture
+! if-stmt-continuation.f90 covers `&` line continuations.
 
 module if_edge_helpers
   implicit none
 contains
   logical function predicate(x)
-    ! Intentionally not declared `pure`: marking it pure would let the
-    ! plugin inject `integer, save :: tauProfileTimer(...)` inside a
-    ! pure procedure, which the standard forbids. That defect is
-    ! tracked separately under issue #36.
+    ! Deliberately not `pure` so the plugin instruments it; pure
+    ! procedures are skipped (#36) and would not contribute to
+    ! coverage of the if-stmt-with-function-call branch below.
     integer, intent(in) :: x
     predicate = x > 0
   end function predicate
@@ -26,7 +22,6 @@ end module if_edge_helpers
 
 
 subroutine if_compact(i)
-  ! Tightly-spaced form, no whitespace inside parens.
   use if_edge_helpers, only : note
   implicit none
   integer, intent(in) :: i
@@ -36,7 +31,6 @@ end subroutine if_compact
 
 
 subroutine if_compound(i, j)
-  ! Compound logical condition on a single line.
   use if_edge_helpers, only : note
   implicit none
   integer, intent(in) :: i, j
@@ -46,7 +40,6 @@ end subroutine if_compound
 
 
 subroutine if_function_call(x)
-  ! Condition is a function call rather than a comparison.
   use if_edge_helpers, only : note, predicate
   implicit none
   integer, intent(in) :: x
@@ -56,7 +49,6 @@ end subroutine if_function_call
 
 
 subroutine if_double_negation(flag)
-  ! Nested .not. wrapping.
   use if_edge_helpers, only : note
   implicit none
   logical, intent(in) :: flag
@@ -83,9 +75,9 @@ program test_if_stmt_edge
     end subroutine if_double_negation
   end interface
 
-  ! Each subroutine is invoked twice: once where the condition is
-  ! true (taking the early return branch) and once where it is false
-  ! (falling through).
+  ! Each subroutine called twice: once with the early-return
+  ! condition true, once with it false, so both branches execute and
+  ! the runtime-balanced TAU timer pairs are exercised.
   call if_compact(0)
   call if_compact(1)
 
