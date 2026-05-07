@@ -596,6 +596,16 @@ namespace salt::fortran {
             // CharBlock, which spans the full physical extent of the if-stmt -- including any `&` line
             // continuations inside the condition or between the condition and the action.  The cooked
             // text of that range (and of the embedded ScalarLogicalExpr) is continuation-free.
+            //
+            // If locationFromSource fails to map either CharBlock we DIE
+            // rather than skip: dropping a single instrumentation point
+            // would leave a TAU_PROFILE_TIMER_START without a matching
+            // TAU_PROFILE_STOP at runtime.  Possible causes of an
+            // unmapped CharBlock include non-conforming Fortran (e.g.
+            // a deleted construct -- see F2018 Annex B.2.2 / R813 /
+            // R823 for the labeled-DO terminator rules), upstream
+            // flang source-mapping bugs (cf. llvm-project#196291), or
+            // other situations that haven't been characterised yet.
             bool Pre(const Fortran::parser::ExecutableConstruct &execConstruct) {
                 if (const auto actionStmt = std::get_if<Fortran::parser::Statement<Fortran::parser::ActionStmt> >(
                     &execConstruct.u)) {
@@ -610,7 +620,11 @@ namespace salt::fortran {
                             noteAlternateReturn(actionStmt->source, /*insideIfStmt=*/false);
                         }
                         const std::optional returnPos{locationFromSource(parsing, actionStmt->source, false)};
-                        const int returnLine{returnPos.value().line};
+                        if (!returnPos.has_value()) {
+                            DIE("SALT: cooked-source mapping unavailable for ReturnStmt; "
+                                "refusing to emit unbalanced TAU timers");
+                        }
+                        const int returnLine{returnPos->line};
                         verboseStream() << "Return statement at " << returnLine << "\n";
                         addReturnStmtInstrumentation(returnLine);
                     } else if (const auto ifInd = std::get_if<Fortran::common::Indirection<Fortran::parser::IfStmt> >(
@@ -624,12 +638,14 @@ namespace salt::fortran {
                                     &innerAction.statement.u)) {
                             // The wrapping Statement<ActionStmt>'s source covers the entire `if (...) return`
                             // including continuations.  Use it to compute the physical line range to replace.
-                            const auto startPos{
-                                locationFromSource(parsing, actionStmt->source, false).value()
-                            };
-                            const auto endPos{
-                                locationFromSource(parsing, actionStmt->source, true).value()
-                            };
+                            const auto startPosOpt{locationFromSource(parsing, actionStmt->source, false)};
+                            const auto endPosOpt{locationFromSource(parsing, actionStmt->source, true)};
+                            if (!startPosOpt.has_value() || !endPosOpt.has_value()) {
+                                DIE("SALT: cooked-source mapping unavailable for `if (cond) return`; "
+                                    "refusing to emit unbalanced TAU timers");
+                            }
+                            const auto &startPos{*startPosOpt};
+                            const auto &endPos{*endPosOpt};
                             // Pull the cooked-source text of the logical condition.  CharBlock::ToString()
                             // yields the post-continuation, comment-stripped representation that flang's
                             // parser already worked with, so the synthesized replacement is syntactically
