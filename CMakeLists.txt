@@ -1155,7 +1155,6 @@ if(TEST_FORTRAN)
     )
   endforeach()
 
-  # TODO use the generic function above to add and process the Fortran tests.
   if(HAVE_TAU)
     set(TAU_F90_OPTS
       -optVerbose -optNoRevert -optSaltInst

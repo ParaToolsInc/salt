@@ -9,7 +9,6 @@
 #include "selectfile.hpp"
 #include "dprint.hpp"
 
-// TODO support all selective instrumentation types
 // TODO refactor this to class instead of using global variables
 // TODO modernize C++
 

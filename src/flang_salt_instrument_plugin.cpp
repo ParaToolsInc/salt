@@ -451,9 +451,9 @@ namespace salt::fortran {
                     ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
                     ss << " [{" << startLoc.sourceFile->path() << "} {";
                     ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
-                    ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
+                    ss << ",1}-{";
                     ss << endLine + 1;
-                    ss << ",1}]"; // TODO column number, last char of end stmt
+                    ss << ",1}]";
 
                     const std::string timerName{ss.str()};
 
@@ -747,7 +747,6 @@ namespace salt::fortran {
             }
             std::stringstream configStream;
             configStream << inputStream.rdbuf();
-            // TODO handle errors if config yaml doesn't parse
             return ryml::parse_in_arena(ryml::to_csubstr(configStream.str()));
         }
 

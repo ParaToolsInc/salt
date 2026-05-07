@@ -433,7 +433,6 @@ bool check_file_against_list(std::list<std::string> list, std::string fname)
 void makeFuncAndTimerNames(FunctionDecl *func, ASTContext *context, SourceManager &src_mgr, std::string &func_name,
                          std::string &timer_name)
 {
-    // TODO: what if it doesn't have a body? -- might have fixed
     Stmt *func_body = func->getBody();
     SourceRange range = func_body->getSourceRange();
 
@@ -1019,7 +1018,6 @@ void instrumentor::instrument()
             }
             std::stringstream configStream;
             configStream << inputStream.rdbuf();
-            // TODO handle errors if config yaml doesn't parse
             yaml_tree = ryml::parse_in_arena(ryml::to_csubstr(configStream.str()));
 
             fclose(config_file);
