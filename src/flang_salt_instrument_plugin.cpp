@@ -51,8 +51,6 @@ limitations under the License.
 #include "flang_source_location.hpp"
 #include "flang_instrumentation_point.hpp"
 
-// TODO Put debug output behind verbose flag
-
 using namespace std::string_literals;
 using namespace Fortran::frontend;
 
