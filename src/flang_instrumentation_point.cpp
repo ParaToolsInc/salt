@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <string>
 #include <sstream>
+#include <iomanip>
 #include <regex>
 
 #include "flang/Common/idioms.h"
@@ -103,6 +104,9 @@ std::string salt::fortran::IfReturnStmtInstrumentationPoint::toString() const {
     std::stringstream ss;
     ss << InstrumentationPoint::toString();
     ss << endLine() << "\t";
+    if (label().has_value()) {
+        ss << "label=" << label().value() << "\t";
+    }
     ss << "\"" << conditionText() << "\"\t";
     if (!returnExprText().empty()) {
         ss << "\"return " << returnExprText() << "\"\t";
@@ -113,7 +117,16 @@ std::string salt::fortran::IfReturnStmtInstrumentationPoint::toString() const {
 std::string salt::fortran::IfReturnStmtInstrumentationPoint::instrumentationString(
     const InstrumentationMap &instMap, [[maybe_unused]] const std::string &lineText) const {
     std::stringstream ss;
-    ss << "      if (" << conditionText() << ") then\n";
+    // F2018 R601: numeric labels occupy cols 1-5 (fixed form) followed
+    // by whitespace before the statement; free form accepts the same
+    // layout.  Right-justify in a 5-col field so the synthesized header
+    // remains valid for both forms.  Without a label, the standard
+    // 6-space prefix.
+    if (label().has_value()) {
+        ss << std::setw(5) << label().value() << " if (" << conditionText() << ") then\n";
+    } else {
+        ss << "      if (" << conditionText() << ") then\n";
+    }
     ss << InstrumentationPoint::instrumentationString(instMap, lineText) << "\n";
     if (returnExprText().empty()) {
         ss << "        return\n";

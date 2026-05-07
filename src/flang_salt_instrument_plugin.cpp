@@ -114,12 +114,14 @@ namespace salt::fortran {
 
             void addIfReturnStmtInstrumentation(const int start_line, const int end_line,
                                                 std::string condition_text,
-                                                std::string return_expr_text) {
+                                                std::string return_expr_text,
+                                                std::optional<long> label) {
                 if (shouldInstrument()) {
                     instrumentationPoints_.emplace_back(
                         std::make_unique<IfReturnStmtInstrumentationPoint>(start_line, end_line,
                                                                            std::move(condition_text),
-                                                                           std::move(return_expr_text)));
+                                                                           std::move(return_expr_text),
+                                                                           std::move(label)));
                 }
             }
 
@@ -666,9 +668,13 @@ namespace salt::fortran {
                             }
                             verboseStream() << "If-return spans lines " << startPos.line << "-" << endPos.line
                                     << ", condition: " << conditionText
-                                    << (returnExprText.empty() ? "" : ", return expr: " + returnExprText) << "\n";
+                                    << (returnExprText.empty() ? "" : ", return expr: " + returnExprText)
+                                    << (actionStmt->label.has_value()
+                                            ? ", label: " + std::to_string(actionStmt->label.value())
+                                            : "")
+                                    << "\n";
                             addIfReturnStmtInstrumentation(startPos.line, endPos.line, conditionText,
-                                                           returnExprText);
+                                                           returnExprText, actionStmt->label);
                         }
                     }
                 }

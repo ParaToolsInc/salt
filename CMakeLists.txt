@@ -1051,6 +1051,7 @@ if(TEST_FORTRAN)
     if-stmt.f90
     if-stmt-edge.f90
     if-stmt-continuation.f90
+    if-stmt-labeled.f90
     alternate-return.f90
     label-do-at-end.f90
     internal-func.f90

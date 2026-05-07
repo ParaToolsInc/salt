@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <string>
 #include <map>
+#include <optional>
 #include <utility>
 
 namespace salt::fortran {
@@ -155,12 +156,17 @@ namespace salt::fortran {
         // `returnExprText` is empty for a plain `return`, or the cooked
         // text of the `<scalar-int-expr>` for the obsolescent alternate-
         // return form (issue #32).
+        // `label` is the numeric statement label on the original
+        // if-stmt (F2018 R601), or std::nullopt if unlabeled.  Preserved
+        // verbatim on the synthesized `if (cond) then` line so any
+        // `goto N` references continue to resolve.
         IfReturnStmtInstrumentationPoint(const int startLine, const int endLine,
                                          std::string conditionText,
-                                         std::string returnExprText) : InstrumentationPoint(
+                                         std::string returnExprText,
+                                         std::optional<long> label) : InstrumentationPoint(
                 InstrumentationPointType::IF_RETURN, startLine, InstrumentationLocation::REPLACE),
             endLine_(endLine), conditionText_(std::move(conditionText)),
-            returnExprText_(std::move(returnExprText)) {
+            returnExprText_(std::move(returnExprText)), label_(std::move(label)) {
         }
 
         [[nodiscard]] int endLine() const {
@@ -175,6 +181,10 @@ namespace salt::fortran {
             return returnExprText_;
         }
 
+        [[nodiscard]] const std::optional<long> &label() const {
+            return label_;
+        }
+
         [[nodiscard]] std::string toString() const override;
 
         [[nodiscard]] std::string instrumentationString(const InstrumentationMap &instMap,
@@ -184,6 +194,7 @@ namespace salt::fortran {
         const int endLine_;
         const std::string conditionText_;
         const std::string returnExprText_;
+        const std::optional<long> label_;
     };
 }
 
