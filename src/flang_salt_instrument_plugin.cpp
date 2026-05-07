@@ -196,14 +196,69 @@ namespace salt::fortran {
             // Never descend into InterfaceSpecification nodes, they can't contain executable statements.
             static bool Pre(const Fortran::parser::InterfaceSpecification &) { return false; }
 
-            bool Pre(const Fortran::parser::MainProgram &) {
+            // Capture the line number that delimits the END of the
+            // procedure's executable section, derived from the wrapping
+            // subprogram/main-program tuple instead of from the last
+            // ExecutionPartConstruct's source.  The last construct's source
+            // can fail to map back through CookedSource for certain
+            // statements (issue #31: labeled CONTINUE terminating a label-DO
+            // at the end of the body, see llvm-project#196291), so we use
+            // the wrapper's bookkeeping as the single source of truth.
+            //
+            // When an InternalSubprogramPart is present (a `contains`
+            // section), the procedure's body ends just before the
+            // ContainsStmt; otherwise it ends just before the End statement.
+            template <typename SubprogramT, typename EndStmtT>
+            void captureBodyEndLines(const SubprogramT &subprogram, int &endLineOut, int &containsLineOut) {
+                // Reset so a procedure that has no `contains` does not inherit
+                // its parent's containsLine bookkeeping.  Without this, an
+                // internal procedure walked from inside an outer procedure
+                // that *does* have a `contains` would see a stale
+                // containsLineOut and emit PROCEDURE_END at the outer's
+                // boundary -- breaking the line-sorted instrumentation
+                // invariant.
+                endLineOut = 0;
+                containsLineOut = 0;
+                const auto &endStmt = std::get<Fortran::parser::Statement<EndStmtT> >(subprogram.t);
+                if (const auto pos = locationFromSource(parsing, endStmt.source, false); pos.has_value()) {
+                    endLineOut = pos.value().line;
+                }
+                const auto &maybeInternalPart =
+                    std::get<std::optional<Fortran::parser::InternalSubprogramPart> >(subprogram.t);
+                if (maybeInternalPart.has_value()) {
+                    const auto &containsStmt =
+                        std::get<Fortran::parser::Statement<Fortran::parser::ContainsStmt> >(
+                            maybeInternalPart.value().t);
+                    if (const auto pos = locationFromSource(parsing, containsStmt.source, false); pos.has_value()) {
+                        containsLineOut = pos.value().line;
+                    }
+                }
+            }
+
+            bool Pre(const Fortran::parser::MainProgram &mainProgram) {
                 isInMainProgram_ = true;
+                captureBodyEndLines<Fortran::parser::MainProgram, Fortran::parser::EndProgramStmt>(
+                    mainProgram, mainProgramEndLine_, mainProgramContainsLine_);
+                return true;
+            }
+
+            bool Pre(const Fortran::parser::SubroutineSubprogram &subprogram) {
+                captureBodyEndLines<Fortran::parser::SubroutineSubprogram, Fortran::parser::EndSubroutineStmt>(
+                    subprogram, subProgramEndLine_, subProgramContainsLine_);
+                return true;
+            }
+
+            bool Pre(const Fortran::parser::FunctionSubprogram &subprogram) {
+                captureBodyEndLines<Fortran::parser::FunctionSubprogram, Fortran::parser::EndFunctionStmt>(
+                    subprogram, subProgramEndLine_, subProgramContainsLine_);
                 return true;
             }
 
             void Post(const Fortran::parser::MainProgram &) {
                 verboseStream() << "Exit main program: " << mainProgramName_ << "\n";
                 isInMainProgram_ = false;
+                mainProgramEndLine_ = 0;
+                mainProgramContainsLine_ = 0;
             }
 
             void Post(const Fortran::parser::ProgramStmt &program) {
@@ -230,6 +285,8 @@ namespace salt::fortran {
                 verboseStream() << "Exit Subroutine: " << subprogramName_ << "\n";
                 skipInstrumentSubprogram_ = false;
                 subprogramName_.clear();
+                subProgramEndLine_ = 0;
+                subProgramContainsLine_ = 0;
             }
 
             bool Pre(const Fortran::parser::FunctionStmt &functionStmt) {
@@ -251,6 +308,8 @@ namespace salt::fortran {
                 skipInstrumentSubprogram_ = false;
                 subprogramName_.clear();
                 subProgramLine_ = 0;
+                subProgramEndLine_ = 0;
+                subProgramContainsLine_ = 0;
             }
 
             // Split handling of ExecutionPart into two phases
@@ -267,66 +326,72 @@ namespace salt::fortran {
             }
 
             void handleExecutionPart(const Fortran::parser::ExecutionPart &executionPart, bool pre) {
-                if (const Fortran::parser::Block &block = executionPart.v; block.empty()) {
+                const Fortran::parser::Block &block = executionPart.v;
+                if (block.empty()) {
                     verboseStream() << "WARNING: Execution part empty.\n";
-                } else {
-                    const std::optional startLocOpt{getLocation(parsing, block.front(), false)};
-                    const std::optional endLocOpt{getLocation(parsing, block.back(), true)};
+                    return;
+                }
 
-                    if (!startLocOpt.has_value()) {
-                        llvm::errs() << "ERROR: execution part had no start source location!\n";
+                const std::optional startLocOpt{getLocation(parsing, block.front(), false)};
+                if (!startLocOpt.has_value()) {
+                    llvm::errs() << "ERROR: execution part had no start source location!\n";
+                    return;
+                }
+                const auto &startLoc{startLocOpt.value()};
+
+                // Compute the line that ends the procedure's executable
+                // section from the wrapping subprogram/main-program tuple --
+                // either the line just before its `contains` keyword (if any)
+                // or just before its End statement.  Computing it this way
+                // (instead of from `block.back()` which can fail to map back
+                // through CookedSource for some statements) handles issue #31
+                // and llvm-project#196291 by construction.
+                const int containsLine = isInMainProgram_ ? mainProgramContainsLine_ : subProgramContainsLine_;
+                const int endStmtLine = isInMainProgram_ ? mainProgramEndLine_ : subProgramEndLine_;
+                const int boundaryLine = containsLine > 0 ? containsLine : endStmtLine;
+                if (boundaryLine <= 0) {
+                    llvm::errs() << "ERROR: could not determine procedure body end; "
+                            "neither contains nor End statement source resolved.\n";
+                    return;
+                }
+                const int endLine = boundaryLine - 1;
+
+                // Insert the timer start in the Pre phase (when we first visit the node)
+                // and the timer stop in the Post phase (when we return after visiting the node's children).
+                if (pre) {
+                    std::stringstream ss;
+                    ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
+                    ss << " [{" << startLoc.sourceFile->path() << "} {";
+                    ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
+                    ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
+                    ss << endLine + 1;
+                    ss << ",1}]"; // TODO column number, last char of end stmt
+
+                    const std::string timerName{ss.str()};
+
+                    // Split the timerName string so that it will fit between Fortran 77's 72-character limit,
+                    // and use character string line continuation syntax compatible with Fortran 77 and modern
+                    // Fortran.
+                    std::stringstream ss2;
+                    for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
+                        ss2 << SALT_FORTRAN_STRING_SPLITTER;
+                        ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
                     }
-                    if (!endLocOpt.has_value()) {
-                        llvm::errs() << "ERROR: execution part had no end source location!\n";
-                    }
 
-                    const auto &startLoc{startLocOpt.value()};
-                    const auto &endLoc{endLocOpt.value()};
+                    const std::string splitTimerName{ss2.str()};
 
-                    // Insert the timer start in the Pre phase (when we first visit the node)
-                    // and the timer stop in the Post phase (when we return after visiting the node's children).
-                    if (pre) {
-                        // TODO this assumes that the program end statement ends the next line after
-                        //      the last statement, but there could be whitespace/comments. Need to actually
-                        //      find the end statement. End statement may not have source position if name
-                        //      not listed -- need to find workaround.
-                        std::stringstream ss;
-                        ss << (isInMainProgram_ ? mainProgramName_ : subprogramName_);
-                        ss << " [{" << startLoc.sourceFile->path() << "} {";
-                        ss << (isInMainProgram_ ? mainProgramLine_ : subProgramLine_);
-                        ss << ",1}-{"; // TODO column number, first char of program/subroutine/function stmt
-                        ss << endLoc.line + 1;
-                        ss << ",1}]"; // TODO column number, last char of end stmt
-
-                        const std::string timerName{ss.str()};
-
-                        // Split the timerName string so that it will fit between Fortran 77's 72-character limit,
-                        // and use character string line continuation syntax compatible with Fortran 77 and modern
-                        // Fortran.
-                        std::stringstream ss2;
-                        for (size_t i = 0; i < timerName.size(); i += SALT_F77_LINE_LENGTH) {
-                            ss2 << SALT_FORTRAN_STRING_SPLITTER;
-                            ss2 << timerName.substr(i, SALT_F77_LINE_LENGTH);
-                        }
-
-                        const std::string splitTimerName{ss2.str()};
-
-                        if (isInMainProgram_) {
-                            verboseStream() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line <<
-                                    ", "
-                                    <<
-                                    startLoc.column << "\n";
-                            addProgramBeginInstrumentation(startLoc.line, splitTimerName);
-                        } else {
-                            verboseStream() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line <<
-                                    ", " <<
-                                    startLoc.column << "\n";
-                            addProcedureBeginInstrumentation(startLoc.line, splitTimerName);
-                        }
+                    if (isInMainProgram_) {
+                        verboseStream() << "Program begin \"" << mainProgramName_ << "\" at " << startLoc.line <<
+                                ", " << startLoc.column << "\n";
+                        addProgramBeginInstrumentation(startLoc.line, splitTimerName);
                     } else {
-                        verboseStream() << "End at " << endLoc.line << ", " << endLoc.column << "\n";
-                        addProcedureEndInstrumentation(endLoc.line);
+                        verboseStream() << "Subprogram begin \"" << subprogramName_ << "\" at " << startLoc.line <<
+                                ", " << startLoc.column << "\n";
+                        addProcedureBeginInstrumentation(startLoc.line, splitTimerName);
                     }
+                } else {
+                    verboseStream() << "End at line " << endLine << "\n";
+                    addProcedureEndInstrumentation(endLine);
                 }
             }
 
@@ -427,9 +492,18 @@ namespace salt::fortran {
             // Keeps track of current state of traversal
             bool isInMainProgram_{false};
             std::string mainProgramName_;
-            int mainProgramLine_;
+            int mainProgramLine_{0};
+            // Line numbers of the wrapping End{Program,Subroutine,Function}Stmt
+            // and (when present) the ContainsStmt that begins the
+            // InternalSubprogramPart.  Used to bound the procedure's
+            // executable section from above instead of relying on the last
+            // ExecutionPartConstruct's source mapping (issue #31).
+            int mainProgramEndLine_{0};
+            int mainProgramContainsLine_{0};
             std::string subprogramName_;
-            int subProgramLine_;
+            int subProgramLine_{0};
+            int subProgramEndLine_{0};
+            int subProgramContainsLine_{0};
 
             bool skipInstrumentFile_;
             bool skipInstrumentSubprogram_{false};

@@ -1011,6 +1011,7 @@ if(TEST_FORTRAN)
     if-stmt-edge.f90
     if-stmt-continuation.f90
     alternate-return.f90
+    label-do-at-end.f90
     internal-func.f90
     interface_test.f90
     submodule_test.f90
@@ -1022,6 +1023,7 @@ if(TEST_FORTRAN)
   # entries so the pipeline can compile, run, and profile them.
   set(FORTRAN_TESTS_PERMISSIVE_SOURCES
     alternate-return.f90
+    label-do-at-end.f90
   )
 
   # Add a smoke test of the fparse-llvm script
