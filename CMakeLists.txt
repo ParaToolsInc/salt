@@ -610,12 +610,53 @@ set(TESTS_LIST
 
 include(CTest)
 
+# Test label helpers. Labels are grouped by key:value so "Label Time
+# Summary" buckets meaningfully and `ctest -L "^lang:"` (etc.) filters
+# by dimension.
+#   lang:{C,CXX,Fortran}
+#   toolchain:{GCC,LLVM}
+#   phase:{smoke,instrument,compile,run,check,setup}
+function(_salt_lang_to_label lang_in out_var)
+  string(TOLOWER "${lang_in}" _l)
+  if(_l STREQUAL "c")
+    set(${out_var} "lang:C" PARENT_SCOPE)
+  elseif(_l STREQUAL "cpp" OR _l STREQUAL "cxx" OR _l STREQUAL "c++")
+    set(${out_var} "lang:CXX" PARENT_SCOPE)
+  elseif(_l STREQUAL "fortran" OR _l MATCHES "^f(77|90|03|08)?$")
+    set(${out_var} "lang:Fortran" PARENT_SCOPE)
+  else()
+    set(${out_var} "lang:unknown" PARENT_SCOPE)
+  endif()
+endfunction()
+
+# Derive a `lang:<L>` ctest label from a source filename's extension by
+# stripping the leading dot and delegating to _salt_lang_to_label.
+function(_salt_ext_to_label src out_var)
+  get_filename_component(_ext ${src} LAST_EXT)
+  string(REGEX REPLACE "^\\." "" _ext "${_ext}")
+  _salt_lang_to_label("${_ext}" _label)
+  set(${out_var} ${_label} PARENT_SCOPE)
+endfunction()
+
+# Map a compiler driver name (gcc, clang, gfortran, flang-new, ...) to a
+# `toolchain:<vendor>` ctest label. GCC family -> GCC; Clang/Flang -> LLVM.
+function(_salt_compiler_to_toolchain comp out_var)
+  string(TOLOWER "${comp}" _c)
+  if(_c MATCHES "gcc|gfortran|g\\+\\+")
+    set(${out_var} "toolchain:GCC" PARENT_SCOPE)
+  elseif(_c MATCHES "clang|flang")
+    set(${out_var} "toolchain:LLVM" PARENT_SCOPE)
+  else()
+    set(${out_var} "toolchain:${comp}" PARENT_SCOPE)
+  endif()
+endfunction()
+
 # Smoke test to check instrumentor compiled and will run
 add_test(NAME salt_parser_smoke_test
   COMMAND $<TARGET_FILE:cparse-llvm> --help)
 set_tests_properties(salt_parser_smoke_test
   PROPERTIES
-  LABELS smoke
+  LABELS "phase:smoke"
   PASS_REGULAR_EXPRESSION "OVERVIEW"
 )
 
@@ -637,6 +678,7 @@ function(add_instrumentor_test test_src)
   if(n_extra_args EQUAL 1)
     set(test_name ${ARGV1})
   endif()
+  _salt_ext_to_label(${test_src} _lang_label)
   add_test(NAME ${test_name}
     COMMAND
       ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
@@ -644,6 +686,7 @@ function(add_instrumentor_test test_src)
   set_tests_properties(${test_name}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_SOURCE_DIR}/tests/${test_src}"
+    LABELS "${_lang_label};phase:instrument"
     PASS_REGULAR_EXPRESSION "[Ii]nstrumentation:"
   )
   add_test(NAME ${test_name}_exists
@@ -652,6 +695,7 @@ function(add_instrumentor_test test_src)
   set_tests_properties(${test_name}_exists
     PROPERTIES
     DEPENDS ${test_name}
+    LABELS "${_lang_label};phase:check"
     PASS_REGULAR_EXPRESSION "TAU_PROFILE_SET_NODE"
   )
 endfunction()
@@ -673,6 +717,7 @@ add_test(NAME check_forward_decl_skips_bodyless
 set_tests_properties(check_forward_decl_skips_bodyless
   PROPERTIES
   DEPENDS instrument_forward_decl_exists
+  LABELS "lang:C;phase:check"
   PASS_REGULAR_EXPRESSION "TAU_PROFILE_SET_NODE"
   FAIL_REGULAR_EXPRESSION "TAU_PROFILE_TIMER[^\n]*undefined_in_tu"
 )
@@ -682,6 +727,7 @@ add_test(NAME check_pure_virtual_skips_bodyless
 set_tests_properties(check_pure_virtual_skips_bodyless
   PROPERTIES
   DEPENDS instrument_pure_virtual_exists
+  LABELS "lang:CXX;phase:check"
   PASS_REGULAR_EXPRESSION "TAU_PROFILE_SET_NODE"
   FAIL_REGULAR_EXPRESSION
     "TAU_PROFILE_TIMER[^\n]*Abstract::unimplemented;TAU_PROFILE_TIMER[^\n]*undefined_free_fn"
@@ -708,6 +754,7 @@ function(add_sif_test test_name lang src sif)
   set(name sif_${test_name})
   get_filename_component(_src_ext ${src} EXT)
   set(out_file ${name}.inst${_src_ext})
+  _salt_lang_to_label(${lang} _lang_label)
   add_test(NAME instrument_${name}
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
             --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
@@ -723,6 +770,7 @@ function(add_sif_test test_name lang src sif)
     PROPERTIES
     REQUIRED_FILES "${CMAKE_SOURCE_DIR}/${src};${CMAKE_SOURCE_DIR}/${sif}"
     ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
+    LABELS "${_lang_label};phase:instrument;sif"
     PASS_REGULAR_EXPRESSION "${instrument_pass_pattern}"
   )
   add_test(NAME check_${name}
@@ -731,6 +779,7 @@ function(add_sif_test test_name lang src sif)
   set_tests_properties(check_${name}
     PROPERTIES
     DEPENDS instrument_${name}
+    LABELS "${_lang_label};phase:check;sif"
   )
 endfunction()
 
@@ -743,6 +792,7 @@ function(add_sif_test_no_output test_name lang src sif)
   set(name sif_${test_name})
   get_filename_component(_src_ext ${src} EXT)
   set(out_file ${name}.inst${_src_ext})
+  _salt_lang_to_label(${lang} _lang_label)
   add_test(NAME instrument_${name}
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
             --tau_select_file=${CMAKE_SOURCE_DIR}/${sif}
@@ -752,6 +802,7 @@ function(add_sif_test_no_output test_name lang src sif)
   set_tests_properties(instrument_${name}
     PROPERTIES
     REQUIRED_FILES "${CMAKE_SOURCE_DIR}/${src};${CMAKE_SOURCE_DIR}/${sif}"
+    LABELS "${_lang_label};phase:instrument;sif"
     FAIL_REGULAR_EXPRESSION "Instrumentation:"
   )
 endfunction()
@@ -940,9 +991,14 @@ endif()
 set(SALT_COMPILERS_TO_TEST gcc clang)
 foreach(comp IN LISTS SALT_COMPILERS_TO_TEST)
   set(SALT_LOWER_COMP ${comp})
+  _salt_compiler_to_toolchain(${comp} _tc_label)
   string(TOUPPER ${comp} comp)
   add_test(NAME setup_${comp}_dir
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${comp})
+  set_tests_properties(setup_${comp}_dir
+    PROPERTIES
+    LABELS "${_tc_label};phase:setup"
+  )
 endforeach()
 
 if(HAVE_TAU)
@@ -999,8 +1055,10 @@ if(HAVE_TAU)
       "[Ss]witching to compiler-based instrumentation"
       "[Cc]ompiling with [Nn]on-[Ii]nstrumented [Rr]egular [Cc]ode"
       "[Ee]rror:")
+    _salt_ext_to_label(${test_src} _lang_label)
     foreach(comp IN LISTS SALT_COMPILERS_TO_TEST)
       set(lower_comp ${comp})
+      _salt_compiler_to_toolchain(${comp} _tc_label)
       string(TOUPPER ${comp} comp)
       # Fixture to cleanup old instrumented source, object files, and executables
       add_test(NAME rm_${lower_comp}_${test_name}_objects
@@ -1014,6 +1072,7 @@ if(HAVE_TAU)
         PROPERTIES
         FIXTURES_SETUP clean_${lower_comp}_${test_name}_objects
         DEPENDS setup_${comp}_dir
+        LABELS "${_lang_label};${_tc_label};phase:setup"
       )
       # Test to actually instrument and build the test source using TAU
       # compiler wrappers & salt parser.  Per-test extra sources can be
@@ -1032,6 +1091,7 @@ if(HAVE_TAU)
         ENVIRONMENT TAU_MAKEFILE=${TAU_${comp}_MAKEFILE}
         FIXTURES_REQUIRED clean_${lower_comp}_${test_name}_objects
         DEPENDS ${depends_on}
+        LABELS "${_lang_label};${_tc_label};phase:compile"
         FAIL_REGULAR_EXPRESSION "${compile_fail_patterns}"
       )
       # Fixture to cleanup old profile directories
@@ -1043,6 +1103,7 @@ if(HAVE_TAU)
         PROPERTIES
         FIXTURES_SETUP clean_${lower_comp}_${test_name}_profiles
         DEPENDS setup_${comp}_dir
+        LABELS "${_lang_label};${_tc_label};phase:setup"
       )
       add_test(NAME mkdir_${test_base_name}.${lower_comp}.d
         COMMAND ${CMAKE_COMMAND} -E make_directory ${test_base_name}.d
@@ -1052,6 +1113,7 @@ if(HAVE_TAU)
         PROPERTIES
         FIXTURES_SETUP clean_${lower_comp}_${test_name}_profiles
         DEPENDS rm_old_${lower_comp}_${test_name}_profiles
+        LABELS "${_lang_label};${_tc_label};phase:setup"
       )
       # Profile w/ TAU and Verify profiles are created
       add_test(NAME run_${lower_comp}_${test_name}
@@ -1064,6 +1126,7 @@ if(HAVE_TAU)
           "TAU_MAKEFILE=${TAU_${comp}_MAKEFILE};PROFILEDIR=${test_base_name}.d"
         DEPENDS compile_${lower_comp}_${test_name}
         FIXTURES_REQUIRED clean_${lower_comp}_${test_name}_profiles
+        LABELS "${_lang_label};${_tc_label};phase:run"
         FAIL_REGULAR_EXPRESSION
           "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
       )
@@ -1076,6 +1139,7 @@ if(HAVE_TAU)
         PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
         FAIL_REGULAR_EXPRESSION "addr=\<0x"
         DEPENDS run_${lower_comp}_${test_name}
+        LABELS "${_lang_label};${_tc_label};phase:check"
       )
     endforeach()
   endfunction()
@@ -1140,7 +1204,7 @@ if(TEST_FORTRAN)
     COMMAND ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/fparse-llvm --help)
   set_tests_properties(fparse_llvm_smoke_test
     PROPERTIES
-    LABELS smoke
+    LABELS "lang:Fortran;phase:smoke"
     PASS_REGULAR_EXPRESSION "USAGE"
   )
 
@@ -1157,6 +1221,7 @@ if(TEST_FORTRAN)
       PROPERTIES
       REQUIRED_FILES "${_required_files}"
       ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
+      LABELS "lang:Fortran;phase:instrument"
       PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
     )
   endforeach()
@@ -1169,6 +1234,7 @@ if(TEST_FORTRAN)
     PROPERTIES
     PASS_REGULAR_EXPRESSION "[\n\r]+[\t ]+&add "
     DEPENDS instrument_internal-func.f90
+    LABELS "lang:Fortran;phase:check"
   )
 
   # Implicit main programs (no program-stmt) have no name or source
@@ -1187,6 +1253,7 @@ if(TEST_FORTRAN)
     PASS_REGULAR_EXPRESSION "implicit-main\\._implicit_main_"
     FAIL_REGULAR_EXPRESSION "\\[\\{[^}]*\\} \\{0,"
     DEPENDS instrument_implicit-main.f90
+    LABELS "lang:Fortran;phase:check"
   )
 
   # Companion tests: the alternate-return values 1, 2, 3 must each
@@ -1204,6 +1271,7 @@ if(TEST_FORTRAN)
       PROPERTIES
       PASS_REGULAR_EXPRESSION "return ${alt_value}"
       DEPENDS instrument_alternate-return.f90
+      LABELS "lang:Fortran;phase:check"
     )
   endforeach()
 
@@ -1239,6 +1307,7 @@ if(TEST_FORTRAN)
       PROPERTIES
       REQUIRED_FILES "${_required_files}"
       ENVIRONMENT "SALT_FORTRAN_VERBOSE=1"
+      LABELS "lang:Fortran;phase:instrument"
       PASS_REGULAR_EXPRESSION "SALT Instrumentor Plugin finished"
     )
 
@@ -1250,17 +1319,20 @@ if(TEST_FORTRAN)
       PROPERTIES
       FAIL_REGULAR_EXPRESSION "tauProfileTimer;TAU_PROFILE"
       DEPENDS instrument_${test_source}
+      LABELS "lang:Fortran;phase:check"
     )
   endforeach()
 
   set(SALT_FORTRAN_COMPILERS_TO_TEST gfortran flang-new)
   foreach(compiler IN LISTS SALT_FORTRAN_COMPILERS_TO_TEST)
+    _salt_compiler_to_toolchain(${compiler} _tc_label)
     string(TOUPPER ${compiler} upper_comp)
     add_test(NAME setup_${compiler}_dir
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${upper_comp})
     set_tests_properties(setup_${compiler}_dir
       PROPERTIES
       FIXTURES_SETUP ${upper_comp}_dir
+      LABELS "lang:Fortran;${_tc_label};phase:setup"
     )
   endforeach()
 
@@ -1278,6 +1350,7 @@ if(TEST_FORTRAN)
         ${CMAKE_SOURCE_DIR}/tests/fortran/${test_base_name}${test_lang})
 
       foreach(compiler IN LISTS SALT_FORTRAN_COMPILERS_TO_TEST)
+        _salt_compiler_to_toolchain(${compiler} _tc_label)
         string(TOUPPER ${compiler} upper_comp)
         if(${compiler} STREQUAL "gfortran")
           set(MAPPED_COMP GCC)
@@ -1309,6 +1382,7 @@ if(TEST_FORTRAN)
           ENVIRONMENT "TAU_MAKEFILE=${TAU_${MAPPED_COMP}_MAKEFILE}"
           DEPENDS "instrument_${test_source}"
           FIXTURES_REQUIRED ${upper_comp}_dir
+          LABELS "lang:Fortran;${_tc_label};phase:compile"
           FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
         )
         # Profile with TAU and Verify profiles are created
@@ -1321,6 +1395,7 @@ if(TEST_FORTRAN)
           ENVIRONMENT
             "TAU_MAKEFILE=${TAU_${MAPPED_COMP}_MAKEFILE};PROFILEDIR=${test_base_name}.d"
           DEPENDS compile_${upper_comp}_${test_source}
+          LABELS "lang:Fortran;${_tc_label};phase:run"
           FAIL_REGULAR_EXPRESSION
             "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
         )
@@ -1333,6 +1408,7 @@ if(TEST_FORTRAN)
           PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
           FAIL_REGULAR_EXPRESSION "addr=\<0x"
           DEPENDS run_${upper_comp}_${test_source}
+          LABELS "lang:Fortran;${_tc_label};phase:check"
         )
       endforeach()
     endforeach()
