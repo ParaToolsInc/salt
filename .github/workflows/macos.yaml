@@ -1,0 +1,69 @@
+name: macOS
+on: push
+
+jobs:
+  build:
+    name: macOS (Homebrew LLVM, no TAU)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install build deps via Homebrew
+        run: |
+          brew update --quiet
+          brew install --quiet llvm flang ninja
+
+      - name: Resolve toolchain paths
+        id: paths
+        run: |
+          {
+            echo "LLVM_PREFIX=$(brew --prefix llvm)"
+            echo "FLANG_PREFIX=$(brew --prefix flang)"
+            echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)"
+            echo "NCPU=$(sysctl -n hw.ncpu)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure SALT (no TAU)
+        run: >
+          cmake -G Ninja -S . -B build
+          -DCMAKE_C_COMPILER=${{ steps.paths.outputs.LLVM_PREFIX }}/bin/clang
+          -DCMAKE_CXX_COMPILER=${{ steps.paths.outputs.LLVM_PREFIX }}/bin/clang++
+          "-DCMAKE_PREFIX_PATH=${{ steps.paths.outputs.LLVM_PREFIX }};${{ steps.paths.outputs.FLANG_PREFIX }}"
+          -DCMAKE_OSX_SYSROOT=${{ steps.paths.outputs.SDKROOT }}
+          -DCMAKE_CXX_FLAGS=-stdlib=libc++
+          -DCMAKE_BUILD_TYPE=Release
+          -Wdev -Wdeprecated
+
+      - name: Compile SALT
+        id: build
+        run: |
+          echo "Cores: ${{ steps.paths.outputs.NCPU }}"
+          if cmake --build build --parallel "${{ steps.paths.outputs.NCPU }}" ; then
+            echo "build_status=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_status=failure" >> "$GITHUB_OUTPUT"
+            echo "::error::Build failed; rerunning verbose, then failing CI"
+            echo "Build failed; rerunning verbose, then failing CI"
+            if ! cmake --build build --verbose ; then
+              echo "::error::Verbose build failed on second attempt"
+              exit 1
+            fi
+          fi
+
+      - name: Run tests (TAU-dependent tests are skipped automatically)
+        working-directory: build
+        run: |
+          if ! ctest --no-tests=error -j "${{ steps.paths.outputs.NCPU }}" --output-on-failure ; then
+            echo "::error::Tests failed, re-running tests with verbose output"
+            echo "Tests failed, re-running tests with verbose output"
+            if ! ctest --no-tests=error --rerun-failed --verbose ; then
+              echo "::error::Rerunning failed tests failed on second attempt"
+            fi
+            exit 1
+          fi
+
+      - name: Fail CI on build failure
+        if: ${{ steps.build.outputs.build_status == 'failure' }}
+        run: echo "Failing build" ; exit 1
