@@ -578,6 +578,21 @@ else()
   endif()
 endif()
 
+# Derive the tau_exec `-T` token list from a Makefile.tau-<variant> path.
+# `tau-config --binding` is filename-driven: with two installed variants
+# (e.g. `Makefile.tau-pthread` and `Makefile.tau-clang-pthread`) plain
+# `-T serial,pthread` matches both and the shortest-binding tiebreaker
+# silently picks the gcc-stack variant. On macOS that mismatches the
+# clang-stack TAU statically linked into the test binary. Encoding every
+# `-` separated token from the variant name into the `-T` list narrows
+# the match to a single binding directory regardless of toolchain.
+function(_salt_tau_exec_tags out_var tau_makefile)
+  get_filename_component(_mk "${tau_makefile}" NAME)
+  string(REGEX REPLACE "^Makefile\\.tau-" "" _tags "${_mk}")
+  string(REPLACE "-" "," _tags "${_tags}")
+  set(${out_var} "serial,${_tags}" PARENT_SCOPE)
+endfunction()
+
 #---------------
 # Tests
 #---------------
@@ -1116,8 +1131,9 @@ if(HAVE_TAU)
         LABELS "${_lang_label};${_tc_label};phase:setup"
       )
       # Profile w/ TAU and Verify profiles are created
+      _salt_tau_exec_tags(_run_tau_tags "${TAU_${comp}_MAKEFILE}")
       add_test(NAME run_${lower_comp}_${test_name}
-        COMMAND ${TAU_EXEC} -T serial,pthread ./${test_base_name}.${lower_comp}
+        COMMAND ${TAU_EXEC} -T ${_run_tau_tags} ./${test_base_name}.${lower_comp}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
       )
       set_tests_properties(run_${lower_comp}_${test_name}
@@ -1386,8 +1402,9 @@ if(TEST_FORTRAN)
           FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
         )
         # Profile with TAU and Verify profiles are created
+        _salt_tau_exec_tags(_run_tau_tags "${TAU_${MAPPED_COMP}_MAKEFILE}")
         add_test(NAME run_${upper_comp}_${test_source}
-          COMMAND ${TAU_EXEC} -T serial,pthread ./${test_base_name}
+          COMMAND ${TAU_EXEC} -T ${_run_tau_tags} ./${test_base_name}
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
         )
         set_tests_properties(run_${upper_comp}_${test_source}
