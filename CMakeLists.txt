@@ -160,6 +160,27 @@ separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 list(LENGTH CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES NUM_CLANG_HEADER_INCLUDES)
 list(JOIN CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "\", \"-I" CLANG_HEADER_INCLUDES)
 set(CLANG_HEADER_INCLUDES "\"-I${CLANG_HEADER_INCLUDES}\"")
+
+# On macOS, libtooling needs -isysroot and the host clang's -resource-dir
+# to satisfy libc++'s wrapped C headers (e.g. <cstddef> -> <stddef.h>).
+# Without these, parsing user TUs fails with "tried including <stddef.h>
+# but didn't find libc++'s <stddef.h>".
+if(APPLE)
+  execute_process(
+    COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
+    OUTPUT_VARIABLE SALT_CLANG_RESOURCE_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _print_resource_dir_rc)
+  if(_print_resource_dir_rc EQUAL 0
+      AND SALT_CLANG_RESOURCE_DIR
+      AND CMAKE_OSX_SYSROOT)
+    string(APPEND CLANG_HEADER_INCLUDES
+      ", \"-isysroot\", \"${CMAKE_OSX_SYSROOT}\""
+      ", \"-resource-dir\", \"${SALT_CLANG_RESOURCE_DIR}\"")
+    math(EXPR NUM_CLANG_HEADER_INCLUDES "${NUM_CLANG_HEADER_INCLUDES} + 4")
+  endif()
+endif()
+
 message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
 message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
 
