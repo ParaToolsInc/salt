@@ -533,7 +533,7 @@ if(TAU_EXEC)
   get_filename_component(TAU_ARCH_DIR ${TAU_ARCH_DIR} DIRECTORY)
   message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
 
-  find_file(TAU_CLANG_MAKEFILE
+  find_file(TAU_LLVM_MAKEFILE
     NAMES Makefile.tau-clang-pthread Makefile.tau-clang-pthread-pdt
     PATHS ${TAU_ARCH_DIR} PATH_SUFFIXES lib
   )
@@ -552,7 +552,7 @@ if(TAU_EXEC)
   )
 
   set(_salt_tau_missing "")
-  foreach(tau_var TAU_CLANG_MAKEFILE TAU_GCC_MAKEFILE TAUCC TAUCXX TAUF90)
+  foreach(tau_var TAU_LLVM_MAKEFILE TAU_GCC_MAKEFILE TAUCC TAUCXX TAUF90)
     if(NOT ${tau_var})
       list(APPEND _salt_tau_missing ${tau_var})
     endif()
@@ -663,6 +663,22 @@ function(_salt_compiler_to_toolchain comp out_var)
     set(${out_var} "toolchain:LLVM" PARENT_SCOPE)
   else()
     set(${out_var} "toolchain:${comp}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+# Map a compiler driver name to its toolchain build subdir (GCC or LLVM).
+# Same vendor classification as _salt_compiler_to_toolchain, but bare name
+# (no `toolchain:` prefix) suitable for use as a CMAKE_BINARY_DIR subdir
+# and as the inflection in TAU_<dir>_MAKEFILE variable lookups.
+function(_salt_compiler_to_dir comp out_var)
+  string(TOLOWER "${comp}" _c)
+  if(_c MATCHES "gcc|gfortran|g\\+\\+")
+    set(${out_var} "GCC" PARENT_SCOPE)
+  elseif(_c MATCHES "clang|flang")
+    set(${out_var} "LLVM" PARENT_SCOPE)
+  else()
+    string(TOUPPER "${comp}" _u)
+    set(${out_var} "${_u}" PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -1004,15 +1020,14 @@ if(TEST_FORTRAN)
 endif()
 
 set(SALT_COMPILERS_TO_TEST gcc clang)
-foreach(comp IN LISTS SALT_COMPILERS_TO_TEST)
-  set(SALT_LOWER_COMP ${comp})
-  _salt_compiler_to_toolchain(${comp} _tc_label)
-  string(TOUPPER ${comp} comp)
-  add_test(NAME setup_${comp}_dir
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${comp})
-  set_tests_properties(setup_${comp}_dir
+# Per-toolchain build subdirs (GCC, LLVM) shared by C/C++ and Fortran tests.
+foreach(tc_name IN ITEMS GCC LLVM)
+  add_test(NAME setup_${tc_name}_dir
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${tc_name})
+  set_tests_properties(setup_${tc_name}_dir
     PROPERTIES
-    LABELS "${_tc_label};phase:setup"
+    FIXTURES_SETUP ${tc_name}_dir
+    LABELS "toolchain:${tc_name};phase:setup"
   )
 endforeach()
 
@@ -1038,26 +1053,98 @@ if(HAVE_TAU)
     set(${out_path_var} ${path_local} PARENT_SCOPE)
   endfunction()
 
-  # Emit per-compiler TAU build/run/profile tests for one test source. Reads
-  # tauc/tauc_opts/compile_opts/compile_fail_patterns/_lang_label/depends_on/
-  # test_name/test_base_name/test_lang/test_path/_${test_base_name}_extra_sources
-  # from the calling scope (compile_instrumented).
+  # Emit profile-dir cleanup + creation fixture pair. `comp_id`/`test_id` go
+  # into test names; `test_base` names the .d profile dir; `dir` is the
+  # toolchain build subdir (GCC, LLVM); `fixture_name` is the FIXTURES_SETUP
+  # value; `parent_dep` is the test the rm step DEPENDS on.
+  function(_salt_tau_emit_profile_dir_fixture
+      comp_id test_id test_base dir
+      lang_label tc_label fixture_name parent_dep)
+    add_test(NAME rm_old_${comp_id}_${test_id}_profiles
+      COMMAND ${CMAKE_COMMAND} -E rm -rf ${test_base}.d
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${dir}
+    )
+    set_tests_properties(rm_old_${comp_id}_${test_id}_profiles
+      PROPERTIES
+      FIXTURES_SETUP ${fixture_name}
+      DEPENDS ${parent_dep}
+      LABELS "${lang_label};${tc_label};phase:setup"
+    )
+    add_test(NAME mkdir_${test_base}.${comp_id}.d
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${test_base}.d
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${dir}
+    )
+    set_tests_properties(mkdir_${test_base}.${comp_id}.d
+      PROPERTIES
+      FIXTURES_SETUP ${fixture_name}
+      DEPENDS rm_old_${comp_id}_${test_id}_profiles
+      LABELS "${lang_label};${tc_label};phase:setup"
+    )
+  endfunction()
+
+  # Emit run + check_*_profile pair. Keyword args:
+  #   COMP_ID/TEST_ID  — go into emitted test names.
+  #   TEST_BASE        — names the .d profile dir.
+  #   DIR              — toolchain build subdir (GCC, LLVM).
+  #   BINARY           — executable basename in ${CMAKE_BINARY_DIR}/${DIR}.
+  #   LANG_LABEL/TC_LABEL — ctest LABELS.
+  #   TAU_MAKEFILE     — resolved TAU Makefile path.
+  #   COMPILE_DEP      — DEPENDS for run_*.
+  #   PROFILE_FIX      — FIXTURES_REQUIRED set name (profile-dir fixture).
+  function(_salt_tau_emit_run_check)
+    set(kw COMP_ID TEST_ID TEST_BASE DIR BINARY LANG_LABEL TC_LABEL
+        TAU_MAKEFILE COMPILE_DEP PROFILE_FIX)
+    cmake_parse_arguments(ARG "" "${kw}" "" ${ARGN})
+    _salt_tau_exec_tags(_run_tau_tags "${ARG_TAU_MAKEFILE}")
+    add_test(NAME run_${ARG_COMP_ID}_${ARG_TEST_ID}
+      COMMAND ${TAU_EXEC} -T ${_run_tau_tags} ./${ARG_BINARY}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${ARG_DIR}
+    )
+    set_tests_properties(run_${ARG_COMP_ID}_${ARG_TEST_ID}
+      PROPERTIES
+      ENVIRONMENT
+        "TAU_MAKEFILE=${ARG_TAU_MAKEFILE};PROFILEDIR=${ARG_TEST_BASE}.d"
+      DEPENDS ${ARG_COMPILE_DEP}
+      FIXTURES_REQUIRED ${ARG_PROFILE_FIX}
+      LABELS "${ARG_LANG_LABEL};${ARG_TC_LABEL};phase:run"
+      FAIL_REGULAR_EXPRESSION
+        "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
+    )
+    add_test(NAME check_${ARG_COMP_ID}_${ARG_TEST_ID}_profile
+      COMMAND ${CMAKE_COMMAND} -E cat ./${ARG_TEST_BASE}.d/profile.0.0.0
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${ARG_DIR}
+    )
+    set_tests_properties(check_${ARG_COMP_ID}_${ARG_TEST_ID}_profile
+      PROPERTIES
+      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
+      FAIL_REGULAR_EXPRESSION "addr=\<0x"
+      DEPENDS run_${ARG_COMP_ID}_${ARG_TEST_ID}
+      LABELS "${ARG_LANG_LABEL};${ARG_TC_LABEL};phase:check"
+    )
+  endfunction()
+
+  # Emit per-compiler TAU build/run/profile tests for one C/C++ test source.
+  # Reads tauc/tauc_opts/compile_opts/compile_fail_patterns/_lang_label/
+  # depends_on/test_name/test_base_name/test_lang/test_path/
+  # _${test_base_name}_extra_sources from compile_instrumented's scope.
   function(_salt_tau_emit_compiler_tests comp)
     set(lower_comp ${comp})
-    _salt_compiler_to_toolchain(${comp} _tc_label)
-    string(TOUPPER ${comp} comp)
+    _salt_compiler_to_toolchain(${comp} tc_label)
+    _salt_compiler_to_dir(${comp} dir)
+    set(obj_fix clean_${lower_comp}_${test_name}_objects)
+    set(prof_fix clean_${lower_comp}_${test_name}_profiles)
     add_test(NAME rm_${lower_comp}_${test_name}_objects
       COMMAND ${CMAKE_COMMAND} -E rm -rf
         ${test_base_name}.o
         ${test_base_name}.inst.o
         ${test_base_name}.inst.${test_lang}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${dir}
     )
     set_tests_properties(rm_${lower_comp}_${test_name}_objects
       PROPERTIES
-      FIXTURES_SETUP clean_${lower_comp}_${test_name}_objects
-      DEPENDS setup_${comp}_dir
-      LABELS "${_lang_label};${_tc_label};phase:setup"
+      FIXTURES_SETUP ${obj_fix}
+      DEPENDS setup_${dir}_dir
+      LABELS "${_lang_label};${tc_label};phase:setup"
     )
     # Per-test extra sources can be supplied via an
     # `_${test_base_name}_extra_sources` variable in the caller's scope
@@ -1067,62 +1154,30 @@ if(HAVE_TAU)
       COMMAND ${tauc} ${tauc_opts} ${compile_opts}
         -o ${test_base_name}.${lower_comp}
         ${test_path} ${_${test_base_name}_extra_sources}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${dir}
     )
     set_tests_properties(compile_${lower_comp}_${test_name}
       PROPERTIES
-      ENVIRONMENT TAU_MAKEFILE=${TAU_${comp}_MAKEFILE}
-      FIXTURES_REQUIRED clean_${lower_comp}_${test_name}_objects
+      ENVIRONMENT TAU_MAKEFILE=${TAU_${dir}_MAKEFILE}
+      FIXTURES_REQUIRED ${obj_fix}
       DEPENDS ${depends_on}
-      LABELS "${_lang_label};${_tc_label};phase:compile"
+      LABELS "${_lang_label};${tc_label};phase:compile"
       FAIL_REGULAR_EXPRESSION "${compile_fail_patterns}"
     )
-    add_test(NAME rm_old_${lower_comp}_${test_name}_profiles
-      COMMAND ${CMAKE_COMMAND} -E rm -rf ${test_base_name}.d
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(rm_old_${lower_comp}_${test_name}_profiles
-      PROPERTIES
-      FIXTURES_SETUP clean_${lower_comp}_${test_name}_profiles
-      DEPENDS setup_${comp}_dir
-      LABELS "${_lang_label};${_tc_label};phase:setup"
-    )
-    add_test(NAME mkdir_${test_base_name}.${lower_comp}.d
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${test_base_name}.d
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(mkdir_${test_base_name}.${lower_comp}.d
-      PROPERTIES
-      FIXTURES_SETUP clean_${lower_comp}_${test_name}_profiles
-      DEPENDS rm_old_${lower_comp}_${test_name}_profiles
-      LABELS "${_lang_label};${_tc_label};phase:setup"
-    )
-    _salt_tau_exec_tags(_run_tau_tags "${TAU_${comp}_MAKEFILE}")
-    add_test(NAME run_${lower_comp}_${test_name}
-      COMMAND ${TAU_EXEC} -T ${_run_tau_tags} ./${test_base_name}.${lower_comp}
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(run_${lower_comp}_${test_name}
-      PROPERTIES
-      ENVIRONMENT
-        "TAU_MAKEFILE=${TAU_${comp}_MAKEFILE};PROFILEDIR=${test_base_name}.d"
-      DEPENDS compile_${lower_comp}_${test_name}
-      FIXTURES_REQUIRED clean_${lower_comp}_${test_name}_profiles
-      LABELS "${_lang_label};${_tc_label};phase:run"
-      FAIL_REGULAR_EXPRESSION
-        "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
-    )
-    add_test(NAME check_${lower_comp}_${test_name}_profile
-      COMMAND ${CMAKE_COMMAND} -E cat ./${test_base_name}.d/profile.0.0.0
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${comp}
-    )
-    set_tests_properties(check_${lower_comp}_${test_name}_profile
-      PROPERTIES
-      PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
-      FAIL_REGULAR_EXPRESSION "addr=\<0x"
-      DEPENDS run_${lower_comp}_${test_name}
-      LABELS "${_lang_label};${_tc_label};phase:check"
-    )
+    _salt_tau_emit_profile_dir_fixture(
+      ${lower_comp} ${test_name} ${test_base_name} ${dir}
+      "${_lang_label}" "${tc_label}" ${prof_fix} setup_${dir}_dir)
+    _salt_tau_emit_run_check(
+      COMP_ID ${lower_comp}
+      TEST_ID ${test_name}
+      TEST_BASE ${test_base_name}
+      DIR ${dir}
+      BINARY ${test_base_name}.${lower_comp}
+      LANG_LABEL "${_lang_label}"
+      TC_LABEL "${tc_label}"
+      TAU_MAKEFILE "${TAU_${dir}_MAKEFILE}"
+      COMPILE_DEP compile_${lower_comp}_${test_name}
+      PROFILE_FIX ${prof_fix})
   endfunction()
 
   # Add a TAU build/run/profile pipeline for a single test source. Optional
@@ -1351,17 +1406,6 @@ if(TEST_FORTRAN)
   endforeach()
 
   set(SALT_FORTRAN_COMPILERS_TO_TEST gfortran flang-new)
-  foreach(compiler IN LISTS SALT_FORTRAN_COMPILERS_TO_TEST)
-    _salt_compiler_to_toolchain(${compiler} _tc_label)
-    string(TOUPPER ${compiler} upper_comp)
-    add_test(NAME setup_${compiler}_dir
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${upper_comp})
-    set_tests_properties(setup_${compiler}_dir
-      PROPERTIES
-      FIXTURES_SETUP ${upper_comp}_dir
-      LABELS "lang:Fortran;${_tc_label};phase:setup"
-    )
-  endforeach()
 
   if(HAVE_TAU)
     set(TAU_F90_OPTS
@@ -1380,18 +1424,14 @@ if(TEST_FORTRAN)
         ${CMAKE_SOURCE_DIR}/tests/fortran/${test_base_name}${test_lang})
 
       foreach(compiler IN LISTS SALT_FORTRAN_COMPILERS_TO_TEST)
-        _salt_compiler_to_toolchain(${compiler} _tc_label)
+        _salt_compiler_to_toolchain(${compiler} tc_label)
+        _salt_compiler_to_dir(${compiler} dir)
         string(TOUPPER ${compiler} upper_comp)
         if(${compiler} STREQUAL "gfortran")
-          set(MAPPED_COMP GCC)
           set(EXTRA_FLAGS
             -cpp -Wpedantic -Wextra -Wno-unused-function
             -Wno-missing-include-dirs ${SALT_WERROR})
-        elseif(${compiler} STREQUAL "flang-new")
-          set(MAPPED_COMP CLANG)
-          set(EXTRA_FLAGS ${SALT_WERROR})
-        elseif(${compiler} STREQUAL "flang")
-          set(MAPPED_COMP CLANG)
+        elseif(${compiler} MATCHES "^flang(-new)?$")
           set(EXTRA_FLAGS ${SALT_WERROR})
         else()
           message(FATAL_ERROR "Unknown compiler: ${compiler}")
@@ -1402,45 +1442,34 @@ if(TEST_FORTRAN)
         if(test_source IN_LIST FORTRAN_TESTS_PERMISSIVE_SOURCES)
           list(REMOVE_ITEM EXTRA_FLAGS "-Wpedantic" ${SALT_WERROR})
         endif()
+        set(PROF_FIX clean_${upper_comp}_${test_source}_profiles)
         add_test(NAME compile_${upper_comp}_${test_source}
           COMMAND ${TAUF90} ${TAU_F90_OPTS} -o ${test_base_name}
             -Wall ${EXTRA_FLAGS} ${TEST_INST_SOURCE}
-          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
+          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${dir}
         )
         set_tests_properties(compile_${upper_comp}_${test_source}
           PROPERTIES
-          ENVIRONMENT "TAU_MAKEFILE=${TAU_${MAPPED_COMP}_MAKEFILE}"
+          ENVIRONMENT "TAU_MAKEFILE=${TAU_${dir}_MAKEFILE}"
           DEPENDS "instrument_${test_source}"
-          FIXTURES_REQUIRED ${upper_comp}_dir
-          LABELS "lang:Fortran;${_tc_label};phase:compile"
+          FIXTURES_REQUIRED ${dir}_dir
+          LABELS "lang:Fortran;${tc_label};phase:compile"
           FAIL_REGULAR_EXPRESSION "[^W][Ee]rror"
         )
-        # Profile with TAU and Verify profiles are created
-        _salt_tau_exec_tags(_run_tau_tags "${TAU_${MAPPED_COMP}_MAKEFILE}")
-        add_test(NAME run_${upper_comp}_${test_source}
-          COMMAND ${TAU_EXEC} -T ${_run_tau_tags} ./${test_base_name}
-          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-        )
-        set_tests_properties(run_${upper_comp}_${test_source}
-          PROPERTIES
-          ENVIRONMENT
-            "TAU_MAKEFILE=${TAU_${MAPPED_COMP}_MAKEFILE};PROFILEDIR=${test_base_name}.d"
-          DEPENDS compile_${upper_comp}_${test_source}
-          LABELS "lang:Fortran;${_tc_label};phase:run"
-          FAIL_REGULAR_EXPRESSION
-            "[Cc]ommand not found;[Ss]egmentation;[Ff]ault;[Ee]rror"
-        )
-        add_test(NAME check_${upper_comp}_${test_source}_profile
-          COMMAND ${CMAKE_COMMAND} -E cat ./${test_base_name}.d/profile.0.0.0
-          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/${upper_comp}
-        )
-        set_tests_properties(check_${upper_comp}_${test_source}_profile
-          PROPERTIES
-          PASS_REGULAR_EXPRESSION "GROUP=\"TAU_DEFAULT\""
-          FAIL_REGULAR_EXPRESSION "addr=\<0x"
-          DEPENDS run_${upper_comp}_${test_source}
-          LABELS "lang:Fortran;${_tc_label};phase:check"
-        )
+        _salt_tau_emit_profile_dir_fixture(
+          ${upper_comp} ${test_source} ${test_base_name} ${dir}
+          "lang:Fortran" "${tc_label}" ${PROF_FIX} setup_${dir}_dir)
+        _salt_tau_emit_run_check(
+          COMP_ID ${upper_comp}
+          TEST_ID ${test_source}
+          TEST_BASE ${test_base_name}
+          DIR ${dir}
+          BINARY ${test_base_name}
+          LANG_LABEL "lang:Fortran"
+          TC_LABEL "${tc_label}"
+          TAU_MAKEFILE "${TAU_${dir}_MAKEFILE}"
+          COMPILE_DEP compile_${upper_comp}_${test_source}
+          PROFILE_FIX ${PROF_FIX})
       endforeach()
     endforeach()
   endif()
