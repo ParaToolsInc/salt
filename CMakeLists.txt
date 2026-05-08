@@ -352,8 +352,10 @@ if(NOT SALT_RYML_HEADER_OK)
     set(_salt_ryml_hint
       " On macOS this typically means the chosen clang++ cannot resolve "
       "libc++ wrapped C headers against the active SDK. See the macOS "
-      "section of README.md for the required configure flags "
-      "(CMAKE_PREFIX_PATH, CMAKE_OSX_SYSROOT, -stdlib=libc++).")
+      "section of README.md and verify the compiler selection first. "
+      "If auto-detection does not work in your environment, you may need "
+      "to override CMAKE_PREFIX_PATH, CMAKE_OSX_SYSROOT, or pass "
+      "-stdlib=libc++ manually.")
   endif()
   message(FATAL_ERROR
     "Cannot compile <ryml_all.hpp> with the configured C++ toolchain."
@@ -491,7 +493,7 @@ endif()
 if(MLIR_FOUND AND Flang_FOUND)
   message(STATUS "Found Flang -- will build Flang frontend plugin")
   set(SALT_MOD_SUFFIX ".saltmod" CACHE STRING
-    "Suffix for SALT-renamed Fortran intrinsic .mod files")
+    "Suffix for SALT-FM Fortran intrinsic .mod files")
   set(SALT_INC_DIR ${CMAKE_INSTALL_INCLUDEDIR}/salt/flang
     CACHE STRING "SALT include directory for Flang intrinsic modules")
   set(TEST_FORTRAN TRUE)

@@ -23,8 +23,12 @@ if [[ -z "${CC:-}" || -z "${CXX:-}" ]] && [[ "$(uname -s)" == "Darwin" ]] \
   BREW_FLANG_PREFIX="$(brew --prefix flang 2>/dev/null || true)"
   if [[ -n "${BREW_LLVM_PREFIX}" && -x "${BREW_LLVM_PREFIX}/bin/clang" \
       && -n "${BREW_FLANG_PREFIX}" && -x "${BREW_FLANG_PREFIX}/bin/flang-new" ]]; then
-    CC_BIN="${BREW_LLVM_PREFIX}/bin/clang"
-    CXX_BIN="${BREW_LLVM_PREFIX}/bin/clang++"
+    if [[ -z "${CC:-}" ]]; then
+      CC_BIN="${BREW_LLVM_PREFIX}/bin/clang"
+    fi
+    if [[ -z "${CXX:-}" ]]; then
+      CXX_BIN="${BREW_LLVM_PREFIX}/bin/clang++"
+    fi
   else
     echo "warning: Homebrew detected but llvm and/or flang formulae are not installed;" >&2
     echo "         falling back to '${CC_BIN}' / '${CXX_BIN}'." >&2
