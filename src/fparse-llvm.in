@@ -48,7 +48,7 @@ Generic Options:
 
 TAU instrumentor options:
 
-  --config_file=<filename>     - Specify path to SALT configuration YAML file
+  --config_file=<filename>     - Specify path to SALT-FM configuration YAML file
   --tau_output=<filename>      - Specify name of output instrumented file
   --tau_select_file=<filename> - Provide a selective instrumentation specification file
   --show                       - Print the command line that would be executed by the wrapper script
@@ -168,7 +168,7 @@ for arg in "$@"; do
         usage
         exit 0
     elif [[ $arg == --version ]]; then
-        echo "SALT FM Version: ${_VERSION}"
+        echo "SALT-FM Version: ${_VERSION}"
         flang-new --version
         exit 0
     elif $expecting_arg_to_forward; then

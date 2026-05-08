@@ -1,7 +1,7 @@
 [![CI](https://github.com/ParaToolsInc/salt/actions/workflows/CI.yaml/badge.svg)](https://github.com/ParaToolsInc/salt/actions/workflows/CI.yaml)
 
-SALT: An LLVM-based Source Analysis Toolkit for HPC
-==================================================
+SALT-FM: An LLVM-based Source Analysis Toolkit for HPC
+======================================================
 
 The [TAU Performance System] is a powerful and versatile performance monitoring and analysis system.
 TAU supports several mechanisms for instrumenting applications,
@@ -11,10 +11,10 @@ by parsing and modifying an application's source code.
 However, source-based instrumentation can be difficult to use,
 especially for large code-bases written in modern languages such as C++ and Fortran.
 To improve the usability of TAU,
-we introduce a next-generation source analysis toolkit called SALT.
-SALT is built using LLVM compiler technology,
+we introduce a next-generation source analysis toolkit called SALT-FM.
+SALT-FM is built using LLVM compiler technology,
 including the libTooling library, Clang's C and C++ parsers, and f18/Flang's Fortran parser.
-SALT supports the following LLVM/Clang versions, each tested in CI against a matching [salt-dev] container image.
+SALT-FM supports the following LLVM/Clang versions, each tested in CI against a matching [salt-dev] container image.
 The same images are also published to [Docker Hub][salt-dev Docker Hub] under the `paratools/salt-dev` repository.
 
 | LLVM/Clang version | GitHub Container Registry           | Docker Hub                |
@@ -27,7 +27,7 @@ The same images are also published to [Docker Hub][salt-dev Docker Hub] under th
 ## Getting Started
 
 > [!NOTE]
-> Configuring SALT inside a git checkout (i.e. running `cmake` for the first
+> Configuring SALT-FM inside a git checkout (i.e. running `cmake` for the first
 > time on a clone) sets `core.hooksPath` in that clone's local git config to
 > point at the vendored `.githooks/` directory, so contributor-side
 > `pre-commit` and `pre-push` hooks become active automatically. The hooks
@@ -36,19 +36,19 @@ The same images are also published to [Docker Hub][salt-dev Docker Hub] under th
 > packaging contexts should disable this -- see [Notes for package
 > maintainers](#notes-for-package-maintainers).
 
-The build system for SALT uses [CMake] as the build system generator
+The build system for SALT-FM uses [CMake] as the build system generator
 (also known as a meta-build system).
 It also requires either a full installation of LLVM and Clang including the
 `clang-cmake-exports` and `cmake-exports` components, or a more minimal set of features and components
 (including both of the aforementioned `cmake-exports`) together with a patch applied to
 two of the LLVM/Clang installed CMake files.
 
-The development and testing of SALT utilizes the [salt-dev] container,
+The development and testing of SALT-FM utilizes the [salt-dev] container,
 which is [posted to Docker Hub].
 The container image includes an installation of `git`, `cmake`, `llvm`/`clang`, and `ninja`.
 The installed `llvm` and `clang` include the patched [CMake] files.
 
-Below are the steps required to get started using SALT:
+Below are the steps required to get started using SALT-FM:
 
 ### 1. Clone this repo:
 
@@ -58,10 +58,10 @@ git clone --recursive https://github.com/ParaToolsInc/salt.git
 Including the `--recursive` flag will ensure you have the patches
 that are applied to the `llvm`/`clang` installed CMake files available to you.
 This is not a requirement if using the [salt-dev] container image.
-The patches prevent SALT's configuration with CMake from failing when
+The patches prevent SALT-FM's configuration with CMake from failing when
 incomplete/minimal installations of LLVM and Clang are present.
 A minimal subset of components must be installed.
-If SALT is failing to be configured in the next step,
+If SALT-FM is failing to be configured in the next step,
 and you have write access to the LLVM and/or Clang installation,
 applying the patches from https://github.com/ParaToolsInc/salt-llvm-patches
 may fix the problem.
@@ -81,16 +81,16 @@ The docker image also includes `ccache` and two configurations of TAU
 for testing with both GCC and Clang.
 (See `/usr/local/x86_64/lib` for the two installed `TAU_MAKEFILE`s.)
 
-### 3. Configure and build SALT:
+### 3. Configure and build SALT-FM:
 
 This step is most easily performed in the [salt-dev] container,
 but can also be performed if a suitable installation of LLVM and Clang is present.
 
 ``` shell
-# Tell CMake to use the clang/clang++ compiler to build SALT
+# Tell CMake to use the clang/clang++ compiler to build SALT-FM
 export CC=clang
 export CXX=clang++
-# configure SALT and generate build system
+# configure SALT-FM and generate build system
 cmake -Wdev -Wdeprecated -S . -B build
 cmake --build build --parallel # Add --verbose to debug something going wrong
 ```
@@ -161,7 +161,7 @@ The tests are all located in the `tests` subdirectory of the project.
 [CMake] test fixtures and test dependencies ensure that:
 
  * The tests run in an order such that inter-test dependencies are satisfied
- * The SALT configuration files are correctly staged to the build directory
+ * The SALT-FM configuration files are correctly staged to the build directory
  * Old instrumented versions of test sources are cleaned up just in time before being instrumented again
    * This is so the user can inspect instrumented sources
  * Old object files are cleaned up
@@ -195,7 +195,7 @@ Running `tau_exec ./hello` should then produce a `profile.0.0.0` file.
 
 ## Notes for package maintainers
 
-When SALT is configured inside a git checkout, the build system installs
+When SALT-FM is configured inside a git checkout, the build system installs
 client-side git hooks (in the working tree's `.git/config` via
 `core.hooksPath`) to enforce `.VERSION` / tag agreement during local
 development. This is convenience tooling for contributors and is

@@ -18,7 +18,7 @@ set(_salt_version_file "${CMAKE_CURRENT_LIST_DIR}/../../.VERSION")
 
 if(NOT EXISTS "${_salt_version_file}")
   message(FATAL_ERROR
-    "Cannot determine SALT version: .VERSION file not found at "
+    "Cannot determine SALT-FM version: .VERSION file not found at "
     "${_salt_version_file}")
 endif()
 
@@ -88,12 +88,12 @@ if(GIT_FOUND AND EXISTS "${_salt_git_dir}")
             "(v${_tag_ver}). Bump .VERSION to >= ${_tag_base_numeric} before configuring.")
         elseif(_tag_base_numeric VERSION_LESS SALT_VERSION_BASE)
           message(STATUS
-            "SALT version: .VERSION (${_salt_version_raw}) is ahead of latest "
+            "SALT-FM version: .VERSION (${_salt_version_raw}) is ahead of latest "
             "reachable tag (v${_tag_ver}); release tag not yet created.")
         else()
           # BASE matches; pre-release component differs.
           message(STATUS
-            "SALT version: .VERSION (${_salt_version_raw}) base matches tag "
+            "SALT-FM version: .VERSION (${_salt_version_raw}) base matches tag "
             "(v${_tag_ver}) but pre-release suffixes differ.")
         endif()
       endif()
@@ -110,7 +110,9 @@ if(GIT_FOUND AND EXISTS "${_salt_git_dir}")
       if(CMAKE_MATCH_2)
         string(APPEND SALT_VERSION_BUILDMETA ".dirty")
       endif()
-      message(STATUS "SALT version: no reachable tag; using .VERSION verbatim with build metadata.")
+      message(STATUS
+        "SALT-FM version: no reachable tag; using .VERSION verbatim "
+        "with build metadata.")
     else()
       message(WARNING "Unrecognized git describe output: '${_salt_git_desc}'")
     endif()
