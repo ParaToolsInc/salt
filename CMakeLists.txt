@@ -1062,6 +1062,9 @@ if(HAVE_TAU)
     set(tauc_opts
       -optVerbose -optNoRevert -optSaltInst
       -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm)
+    if(APPLE)
+      list(APPEND tauc_opts -optShared)
+    endif()
     set(compile_opts ${TAU_COMPILE_OPTIONS})
     # Each entry below is one regex; CMake joins them with `;` to form the
     # FAIL_REGULAR_EXPRESSION list (any matching pattern fails the test).
@@ -1356,6 +1359,9 @@ if(TEST_FORTRAN)
     set(TAU_F90_OPTS
       -optVerbose -optNoRevert -optSaltInst
       -optSaltParser=${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm)
+    if(APPLE)
+      list(APPEND TAU_F90_OPTS -optShared)
+    endif()
     foreach(test_source IN LISTS FORTRAN_TESTS_SOURCES_LIST)
       # Get the name of the instrumented source file
       get_filename_component(test_base_name ${test_source} NAME_WLE)
