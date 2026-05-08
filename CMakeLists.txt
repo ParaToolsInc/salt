@@ -674,6 +674,12 @@ if(TAU_EXEC)
   get_filename_component(TAU_ARCH_DIR ${TAU_EXEC} DIRECTORY)
   get_filename_component(TAU_ARCH_DIR ${TAU_ARCH_DIR} DIRECTORY)
   message(STATUS "TAU_ARCH_DIR: ${TAU_ARCH_DIR}")
+  # tau_exec / tau_cc.sh / tau_f90.sh internally call sibling helpers
+  # (tau-config, tau_compiler.sh) by bare name, requiring TAU's bin
+  # directory on PATH. Distros that install TAU into /usr/local pick this
+  # up implicitly; in-tree installs (common on macOS) do not. Tests below
+  # prepend ${TAU_BIN_DIR} via ENVIRONMENT_MODIFICATION.
+  set(TAU_BIN_DIR "${TAU_ARCH_DIR}/bin")
 
   find_file(TAU_LLVM_MAKEFILE
     NAMES Makefile.tau-clang-pthread Makefile.tau-clang-pthread-pdt
@@ -1246,6 +1252,8 @@ if(HAVE_TAU)
       PROPERTIES
       ENVIRONMENT
         "TAU_MAKEFILE=${ARG_TAU_MAKEFILE};PROFILEDIR=${ARG_TEST_BASE}.d"
+      ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:${TAU_BIN_DIR}"
       DEPENDS ${ARG_COMPILE_DEP}
       FIXTURES_REQUIRED ${ARG_PROFILE_FIX}
       LABELS "${ARG_LANG_LABEL};${ARG_TC_LABEL};phase:run"
@@ -1301,6 +1309,8 @@ if(HAVE_TAU)
     set_tests_properties(compile_${lower_comp}_${test_name}
       PROPERTIES
       ENVIRONMENT TAU_MAKEFILE=${TAU_${dir}_MAKEFILE}
+      ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:${TAU_BIN_DIR}"
       FIXTURES_REQUIRED ${obj_fix}
       DEPENDS ${depends_on}
       LABELS "${_lang_label};${tc_label};phase:compile"
@@ -1593,6 +1603,8 @@ if(TEST_FORTRAN)
         set_tests_properties(compile_${upper_comp}_${test_source}
           PROPERTIES
           ENVIRONMENT "TAU_MAKEFILE=${TAU_${dir}_MAKEFILE}"
+          ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${TAU_BIN_DIR}"
           DEPENDS "instrument_${test_source}"
           FIXTURES_REQUIRED ${dir}_dir
           LABELS "lang:Fortran;${tc_label};phase:compile"
