@@ -280,7 +280,7 @@ if [[ -z "${output_file:-}" ]]; then
 fi
 
 echo "output file: ${output_file:-\"<None given>\" }"
-echo "Remaining Arguments: ${args[*]}"
+echo "Remaining Arguments: ${args[*]:-}"
 
 # This script invokes an LLVM flang frontend plugin to parse and instrument Fortran code
 cmd=(flang-new
@@ -291,7 +291,7 @@ cmd=(flang-new
     -I"${_SALT_INC_DIR}"
     "${input_file}"
     -o "${output_file}"
-    "${args[@]}")
+    ${args[@]+"${args[@]}"})
 if $show; then
     echo "SALT_FORTRAN_CONFIG_FILE=\"${FORTRAN_CONFIG_FILE}\""
     echo "SALT_FORTRAN_SELECT_FILE=\"${select_file:-}\""

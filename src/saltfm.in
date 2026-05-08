@@ -135,16 +135,16 @@ fi
 # if the --show flag is set
 if [[ "${show:-false}" == "true" ]]; then
     if [[ "${tool}" == "fparse-llvm" ]]; then
-        echo "$tool --show ${args[*]}"
+        echo "$tool --show ${args[*]:-}"
         # fparse-llvm is also a wrapper script with a --show flag
         # so print the command line that would be executed by the inner wrapper script
         # if the language is Fortran
-        "${_SCRIPT_DIR}/fparse-llvm" --show "${args[@]}"
+        "${_SCRIPT_DIR}/fparse-llvm" --show ${args[@]+"${args[@]}"}
     else
-        echo "$tool ${args[*]}"
+        echo "$tool ${args[*]:-}"
     fi
     exit 0
 fi
 
 # Execute the tool with the arguments
-"${_SCRIPT_DIR}/${tool}" "${args[@]}"
+"${_SCRIPT_DIR}/${tool}" ${args[@]+"${args[@]}"}
