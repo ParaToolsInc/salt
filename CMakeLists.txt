@@ -26,6 +26,31 @@ if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
 endif()
 
+# Auto-detect CMAKE_OSX_SYSROOT via xcrun if not set. Without it, CMake
+# does not pass `-isysroot` and the active SDK's C headers come in via
+# explicit `-isystem` entries (re-exported from LLVM's CMake config
+# targets), which sit *higher* than libc++'s implicit search and break
+# wrapper resolution for <cfloat> / <cmath> / <cinttypes> deep in our
+# ryml_all.hpp / LLVM header chain. Must be set before `project()` so
+# CMake's compiler probes and platform initialisation see it. xcrun
+# ships with Xcode / Command Line Tools so it is always available on
+# a configured macOS host.
+if(APPLE AND NOT CMAKE_OSX_SYSROOT)
+  execute_process(
+    COMMAND xcrun --sdk macosx --show-sdk-path
+    OUTPUT_VARIABLE _salt_xcrun_sdk
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _salt_xcrun_sdk_rc)
+  if(_salt_xcrun_sdk_rc EQUAL 0 AND _salt_xcrun_sdk
+      AND IS_DIRECTORY "${_salt_xcrun_sdk}")
+    message(STATUS "Auto-detected CMAKE_OSX_SYSROOT: ${_salt_xcrun_sdk}")
+    set(CMAKE_OSX_SYSROOT "${_salt_xcrun_sdk}" CACHE PATH
+      "macOS SDK path (auto-detected via xcrun)")
+  endif()
+  unset(_salt_xcrun_sdk)
+  unset(_salt_xcrun_sdk_rc)
+endif()
+
 # Test if being built under a multi-config generator, i.e. and IDE like MSVS
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 # Organize MSVS projects with folders
@@ -105,6 +130,19 @@ project(saltfm
   HOMEPAGE_URL "https://github.com/ParaToolsInc/salt"
   LANGUAGES CXX C)
 
+# Force libc++ for the Homebrew/Spack/source-built Clang we require on
+# macOS. Without the explicit flag the libc++ header search order
+# falls back to the active SDK's C headers before libc++'s wrappers,
+# producing "<cfloat> tried including <float.h> but didn't find
+# libc++'s <float.h>" errors deep in our ryml_all.hpp / LLVM header
+# chain. (SALT requires Clang, not AppleClang, so the condition is
+# narrow.) Skipped if the user already selected a stdlib via
+# CMAKE_CXX_FLAGS or CXXFLAGS.
+if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND NOT CMAKE_CXX_FLAGS MATCHES "-stdlib=")
+  string(APPEND CMAKE_CXX_FLAGS " -stdlib=libc++")
+endif()
+
 include(GNUInstallDirs)
 
 #----------
@@ -119,6 +157,66 @@ include(GNUInstallDirs)
 # https://github.com/ParaToolsInc/salt-llvm-patches. If either of the steps
 # below fails and you have write access to the LLVM/Clang installations,
 # try patching them using the supplied patches.
+
+# Seed CMAKE_PREFIX_PATH from the active C++ compiler, llvm-config,
+# and flang-new so find_package below locates non-default LLVM/Flang
+# installs (Homebrew, Spack, conda, hand-built) without the user
+# passing -DCMAKE_PREFIX_PATH. Toolchain-driven detection - no
+# package-manager queries - so it works for any install whose bin/ is
+# on PATH. Skipped entirely if CMAKE_PREFIX_PATH was already set by
+# the user (cache or env).
+function(_salt_seed_prefix tag path)
+  if(NOT path OR "${path}" IN_LIST CMAKE_PREFIX_PATH)
+    return()
+  endif()
+  message(STATUS "Seeding CMAKE_PREFIX_PATH from ${tag}: ${path}")
+  list(APPEND CMAKE_PREFIX_PATH "${path}")
+  set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
+endfunction()
+
+if(NOT CMAKE_PREFIX_PATH AND "$ENV{CMAKE_PREFIX_PATH}" STREQUAL "")
+  # `${CMAKE_CXX_COMPILER}` is the most reliable LLVM-prefix anchor:
+  # if CMake's compiler probe just picked clang++ from a non-default
+  # install, its <prefix>/bin/clang++ points straight at the LLVM
+  # install root. Covers the common case where llvm-config was not
+  # symlinked onto PATH (e.g. Homebrew keeps llvm-config in
+  # /usr/local/opt/llvm/bin but only symlinks clang/clang++).
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+      OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    get_filename_component(_salt_cxx_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_filename_component(_salt_cxx_prefix "${_salt_cxx_bin}" DIRECTORY)
+    _salt_seed_prefix("${CMAKE_CXX_COMPILER}" "${_salt_cxx_prefix}")
+    unset(_salt_cxx_bin)
+    unset(_salt_cxx_prefix)
+  endif()
+  find_program(SALT_LLVM_CONFIG_EXE NAMES llvm-config
+    DOC "llvm-config used to seed CMAKE_PREFIX_PATH")
+  if(SALT_LLVM_CONFIG_EXE)
+    execute_process(
+      COMMAND ${SALT_LLVM_CONFIG_EXE} --prefix
+      OUTPUT_VARIABLE _salt_llvm_prefix
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE _salt_llvm_prefix_rc)
+    if(_salt_llvm_prefix_rc EQUAL 0)
+      _salt_seed_prefix("${SALT_LLVM_CONFIG_EXE}" "${_salt_llvm_prefix}")
+    endif()
+    unset(_salt_llvm_prefix)
+    unset(_salt_llvm_prefix_rc)
+  endif()
+  # Homebrew ships flang in a separate keg from llvm; Spack also stages
+  # them under distinct prefixes. Also probe for flang-new and add its
+  # `<prefix>` so find_package(Flang CONFIG) can resolve.
+  find_program(SALT_FLANG_NEW_EXE NAMES flang-new flang
+    DOC "flang driver used to seed CMAKE_PREFIX_PATH")
+  if(SALT_FLANG_NEW_EXE)
+    get_filename_component(_salt_flang_bin "${SALT_FLANG_NEW_EXE}" DIRECTORY)
+    get_filename_component(_salt_flang_prefix "${_salt_flang_bin}" DIRECTORY)
+    _salt_seed_prefix("${SALT_FLANG_NEW_EXE}" "${_salt_flang_prefix}")
+    unset(_salt_flang_bin)
+    unset(_salt_flang_prefix)
+  endif()
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
@@ -225,6 +323,42 @@ endif()
 
 message(STATUS "CLANG_HEADER_INCLUDES: ${CLANG_HEADER_INCLUDES}")
 message(STATUS "NUM_CLANG_HEADER_INCLUDES: ${NUM_CLANG_HEADER_INCLUDES}")
+
+# Fail-fast probe: the deepest external header in our include chain is
+# the vendored ryml_all.hpp. On macOS a misconfigured C++ toolchain
+# (e.g. Homebrew clang++ against the Command Line Tools SDK rather
+# than the Xcode SDK, or libc++ wrapped C headers without a matching
+# resource-dir) reliably blows up parsing this header from the actual
+# build. Probe at configure time so misconfig surfaces here with a
+# README pointer instead of as opaque header errors mid-build.
+include(CheckCXXSourceCompiles)
+set(_salt_ryml_save_includes "${CMAKE_REQUIRED_INCLUDES}")
+set(_salt_ryml_save_flags "${CMAKE_REQUIRED_FLAGS}")
+list(APPEND CMAKE_REQUIRED_INCLUDES "${CMAKE_SOURCE_DIR}/include")
+list(APPEND CMAKE_REQUIRED_FLAGS "-std=c++17")
+check_cxx_source_compiles("
+#define RYML_SINGLE_HDR_DEFINE_NOW
+#define RYML_SHARED
+#include <ryml_all.hpp>
+int main(void) { return 0; }
+" SALT_RYML_HEADER_OK)
+set(CMAKE_REQUIRED_INCLUDES "${_salt_ryml_save_includes}")
+set(CMAKE_REQUIRED_FLAGS "${_salt_ryml_save_flags}")
+unset(_salt_ryml_save_includes)
+unset(_salt_ryml_save_flags)
+if(NOT SALT_RYML_HEADER_OK)
+  set(_salt_ryml_hint "")
+  if(APPLE)
+    set(_salt_ryml_hint
+      " On macOS this typically means the chosen clang++ cannot resolve "
+      "libc++ wrapped C headers against the active SDK. See the macOS "
+      "section of README.md for the required configure flags "
+      "(CMAKE_PREFIX_PATH, CMAKE_OSX_SYSROOT, -stdlib=libc++).")
+  endif()
+  message(FATAL_ERROR
+    "Cannot compile <ryml_all.hpp> with the configured C++ toolchain."
+    "${_salt_ryml_hint}")
+endif()
 
 #------------------------------------------
 # Specify clang and system libraries needed
