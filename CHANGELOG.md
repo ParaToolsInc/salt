@@ -50,7 +50,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cparse-llvm (signature start to body close brace), instead of the
   previously hardcoded `,1}` placeholders
   ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman,
-  closes [#49](https://github.com/ParaToolsInc/salt/issues/49)).
+  closes [#49](https://github.com/ParaToolsInc/salt/issues/49)
+  and [#50](https://github.com/ParaToolsInc/salt/issues/50)).
 - Regression coverage for cparse-llvm's bodyless `FunctionDecl` handling
   (forward declarations, pure-virtual methods); paired with a stub TU
   so the instrumented binary also links and runs end-to-end
