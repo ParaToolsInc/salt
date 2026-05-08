@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script determines whether to call the SALTFM C/C++ or Fortran instrumentor
+# This script determines whether to call the SALT-FM C/C++ or Fortran instrumentor
 # based on the file extension of the input source file or the --lang option.
 
 set -o errexit
@@ -34,7 +34,7 @@ USAGE: $0 [options] <source0> [... <sourceN>]
 
 OPTIONS:
 
-Generic SALTFM Options:
+Generic SALT-FM Options:
 
   -h                           - Alias for --help
   --help                       - Display available options (--help-hidden for more)
@@ -47,7 +47,7 @@ Generic SALTFM Options:
 
 TAU instrumentor options:
 
-  --config_file=<filename>     - Specify path to SALT configuration YAML file
+  --config_file=<filename>     - Specify path to SALT-FM configuration YAML file
   --tau_instrument_inline      - Instrument inlined functions (default: false)
   --tau_output=<filename>      - Specify name of output instrumented file
   --tau_select_file=<filename> - Provide a selective instrumentation specification file
@@ -98,7 +98,7 @@ for arg in "$@"; do
         "${_SCRIPT_DIR}/cparse-llvm" --help
         exit 0
     elif [[ $arg == --version ]]; then
-        echo "SALT FM Version: ${_VERSION}"
+        echo "SALT-FM Version: ${_VERSION}"
         if [[ -n "${tool:-}" ]]; then
             "${_SCRIPT_DIR}/${tool}" --version
         fi

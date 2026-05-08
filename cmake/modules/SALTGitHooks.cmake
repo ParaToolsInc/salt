@@ -57,9 +57,9 @@ execute_process(
   ERROR_VARIABLE _salt_set_err)
 
 if(_salt_set_rc EQUAL 0)
-  message(STATUS "SALT: configured git core.hooksPath = ${_salt_desired_hooks_path}")
+  message(STATUS "SALT-FM: configured git core.hooksPath = ${_salt_desired_hooks_path}")
 else()
-  message(WARNING "SALT: failed to set git core.hooksPath: ${_salt_set_err}")
+  message(WARNING "SALT-FM: failed to set git core.hooksPath: ${_salt_set_err}")
 endif()
 
 unset(_salt_repo_root)

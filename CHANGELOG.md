@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to SALT are documented here. Format follows
+All notable changes to SALT-FM are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -9,7 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.4.0] - 2026-05-08
 
 - macOS build support and LLVM 22 added to the CI test matrix; bumps
-  `.VERSION` to 0.4.0 and makes `cparse-llvm --version` report the SALT
+  `.VERSION` to 0.4.0 and makes `cparse-llvm --version` report the SALT-FM
   version (previously only the LLVM banner)
   ([#48](https://github.com/ParaToolsInc/salt/pull/48) by @zbeekman).
 - F2018 separate-module-procedure (R1538) support in the Flang plugin,
@@ -117,7 +117,7 @@ plugin in addition to the existing C/C++ tooling.
   instrumentation for `if (...) return` statements
   ([#25](https://github.com/ParaToolsInc/salt/pull/25) by @zbeekman, with
   major Fortran-side work by @nchaimov).
-- TAU is now optional when building SALT
+- TAU is now optional when building SALT-FM
   ([#25](https://github.com/ParaToolsInc/salt/pull/25) by @zbeekman).
 - Funding acknowledgement section added to the README
   ([#27](https://github.com/ParaToolsInc/salt/pull/27) by @nchaimov).
@@ -154,7 +154,7 @@ tag, ending with the v0.2.0 SALT-FM milestone.
 - `TAU_PROFILE_SET_NODE` correctly emitted from `main` for C and C++
   instrumentation
   ([#22](https://github.com/ParaToolsInc/salt/pull/22) by @zbeekman):
-  - [#21](https://github.com/ParaToolsInc/salt/issues/21) - C/C++ SALT now
+  - [#21](https://github.com/ParaToolsInc/salt/issues/21) - C/C++ SALT-FM now
     injects instrumentation correctly into `main`.
 - Segfault fixed when the trailing `--` argument was omitted from
   `cparse-llvm` invocations
