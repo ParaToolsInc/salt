@@ -115,24 +115,34 @@ Apple's bundled clang does not ship `flang`. Install the Homebrew formulae
 brew install llvm flang ninja
 ```
 
-Then configure with explicit flags so clang++ uses Homebrew libc++ headers
-against the Xcode SDK rather than the older Command Line Tools SDK:
+Configure and build the same way as on Linux, pointing the compiler at
+the Homebrew LLVM clang so `flang-new` is reachable:
 
 ``` shell
 cmake -Wdev -Wdeprecated -G Ninja -S . -B build \
   -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
   -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
-  -DCMAKE_PREFIX_PATH="$(brew --prefix llvm);$(brew --prefix flang)" \
-  -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
-  -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
+CMake auto-detects the rest:
+
+- `CMAKE_PREFIX_PATH` is seeded from the active C++ compiler's prefix,
+  `llvm-config`, and `flang-new` (no Homebrew/Spack/conda queries) so
+  `find_package(LLVM)` and `find_package(Flang)` resolve without
+  `-DCMAKE_PREFIX_PATH=...`.
+- `CMAKE_OSX_SYSROOT` falls back to the active Xcode SDK; you do not
+  need to pass it explicitly.
+- A configure-time `try_compile` of `<ryml_all.hpp>` with the resolved
+  toolchain catches misconfiguration with an actionable error before
+  the real build starts.
+
 Notes:
 
-- `CMAKE_OSX_DEPLOYMENT_TARGET` defaults to `11.0` (libc++ in LLVM ≥ 11
-  emits `<__configuration/availability.h>` warnings below this floor).
+- `CMAKE_OSX_DEPLOYMENT_TARGET` defaults to `11.0` and is auto-raised
+  to match the linked LLVM dylib's `LC_BUILD_VERSION minos` if higher
+  (avoids ld "object file built for newer macOS version" warnings).
 - If TAU is not available, pass `-DSALT_REQUIRE_TAU=OFF`; TAU-dependent
   tests are skipped automatically.
 
