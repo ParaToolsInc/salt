@@ -19,8 +19,12 @@ endif()
 
 # Big Sur is the oldest macOS supported by libc++ in LLVM 11+ (the floor
 # we ship against). Targeting 10.15 emits "selected platform is no longer
-# supported" warnings from <__configuration/availability.h>.
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
+# supported" warnings from <__configuration/availability.h>. The target
+# may be raised again post-find_package(LLVM) to match the LLVM dylib's
+# own LC_BUILD_VERSION minos.
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
+endif()
 
 # Test if being built under a multi-config generator, i.e. and IDE like MSVS
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -117,6 +121,44 @@ include(GNUInstallDirs)
 # try patching them using the supplied patches.
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
+
+# On macOS, the LLVM dylib we link against often declares a higher
+# LC_BUILD_VERSION minos than CMAKE_OSX_DEPLOYMENT_TARGET (Homebrew and
+# Spack bottles target the build host's macOS). Linking that combination
+# produces a swarm of "object file ... built for newer macOS version"
+# warnings from ld and a portability promise we cannot honour anyway.
+# Resolve the dylib via the compiler itself (-print-file-name) so this
+# works for Homebrew, Spack, conda, or a hand-built LLVM. If the probe
+# fails or the value is lower, the 11.0 floor stays in place.
+if(APPLE)
+  execute_process(
+    COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libLLVM.dylib
+    OUTPUT_VARIABLE _salt_llvm_dylib
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _salt_pf_rc)
+  if(_salt_pf_rc EQUAL 0
+      AND _salt_llvm_dylib
+      AND NOT _salt_llvm_dylib STREQUAL "libLLVM.dylib"
+      AND EXISTS "${_salt_llvm_dylib}")
+    execute_process(
+      COMMAND otool -l "${_salt_llvm_dylib}"
+      OUTPUT_VARIABLE _salt_otool_out
+      RESULT_VARIABLE _salt_otool_rc)
+    if(_salt_otool_rc EQUAL 0)
+      string(REGEX MATCH "minos[ \t]+([0-9]+\\.[0-9]+)"
+             _ "${_salt_otool_out}")
+      if(CMAKE_MATCH_1
+          AND CMAKE_MATCH_1 VERSION_GREATER
+              "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+        message(STATUS
+          "Raising CMAKE_OSX_DEPLOYMENT_TARGET "
+          "${CMAKE_OSX_DEPLOYMENT_TARGET} -> ${CMAKE_MATCH_1} "
+          "to match ${_salt_llvm_dylib}")
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "${CMAKE_MATCH_1}")
+      endif()
+    endif()
+  endif()
+endif()
 
 # get_cmake_property(_variableNames VARIABLES)
 # list(SORT _variableNames)
