@@ -6,3 +6,4 @@ build-*/
 .vscode/
 .spack-env/
 tau2/
+.envrc
