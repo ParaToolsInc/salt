@@ -8,6 +8,33 @@ set -o nounset
 set -o pipefail
 set -o verbose
 
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wdev -Wdeprecated -G Ninja -S . -B build
+# Pick the C/C++ compiler. On macOS, default `clang`/`clang++` resolve to
+# AppleClang under /usr/bin which lacks `flang`, so prefer the Homebrew
+# LLVM keg when both `llvm` and `flang` formulae are installed. Honour
+# CC/CXX from the environment if already set so direnv / module-loaded
+# toolchains win.
+CC_BIN="${CC:-clang}"
+CXX_BIN="${CXX:-clang++}"
+if [[ -z "${CC:-}" || -z "${CXX:-}" ]] && [[ "$(uname -s)" == "Darwin" ]] \
+    && command -v brew >/dev/null 2>&1; then
+  # `brew --prefix <formula>` returns the path even if the keg is not
+  # installed, so probe the actual binaries to confirm presence.
+  BREW_LLVM_PREFIX="$(brew --prefix llvm 2>/dev/null || true)"
+  BREW_FLANG_PREFIX="$(brew --prefix flang 2>/dev/null || true)"
+  if [[ -n "${BREW_LLVM_PREFIX}" && -x "${BREW_LLVM_PREFIX}/bin/clang" \
+      && -n "${BREW_FLANG_PREFIX}" && -x "${BREW_FLANG_PREFIX}/bin/flang-new" ]]; then
+    CC_BIN="${BREW_LLVM_PREFIX}/bin/clang"
+    CXX_BIN="${BREW_LLVM_PREFIX}/bin/clang++"
+  else
+    echo "warning: Homebrew detected but llvm and/or flang formulae are not installed;" >&2
+    echo "         falling back to '${CC_BIN}' / '${CXX_BIN}'." >&2
+    echo "         Install with: brew install llvm flang" >&2
+  fi
+fi
+
+cmake -DCMAKE_C_COMPILER="${CC_BIN}" -DCMAKE_CXX_COMPILER="${CXX_BIN}" -Wdev -Wdeprecated -G Ninja -S . -B build
 cmake --build build --parallel 8 --verbose || cmake --build build --verbose
-( cd build && ( ctest -j --output-on-failure || ctest --rerun-failed --verbose ) )
+# `--no-tests=error` causes ctest to fail rather than silently report
+# success when zero tests are registered (e.g. configure picked a SALT
+# variant without tests).
+( cd build && ( ctest -j --output-on-failure --no-tests=error || ctest --rerun-failed --verbose --no-tests=error ) )
