@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- macOS build robustness: configure-time auto-detection of
+  `CMAKE_OSX_SYSROOT`, `CMAKE_PREFIX_PATH`, and `-stdlib=libc++`;
+  deployment target aligned with the LLVM dylib; sysroot and
+  resource-dir injected for `cparse-llvm` LibTooling; fail-fast
+  `<ryml_all.hpp>` configure-time probe so misconfigured toolchains
+  surface at configure rather than mid-build
+  ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman):
+  - [#60](https://github.com/ParaToolsInc/salt/issues/60) - macOS
+    toolchain auto-detect plus fail-fast on misconfigured SDK / libc++
+    setups.
+- CMake test refactor: `compile_instrumented` split into focused
+  helpers; `${CMAKE_BINARY_DIR}/{GCC,LLVM}` namespacing applied to TAU
+  test directories; profile-dir and run-check fixtures shared across
+  C/C++ and Fortran (Fortran TAU tests gain the `rm_old` / `mkdir`
+  fixtures they were missing); ctest labels added for grouping
+  ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman):
+  - [#28](https://github.com/ParaToolsInc/salt/issues/28) - CMake test
+    logic cleanup (folding C/C++ and Fortran into a single helper was
+    dropped as too broad; flag handling diverges).
+- New `macos-latest` GitHub Actions job using Homebrew LLVM and Flang
+  (no TAU on this leg)
+  ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman).
+- TAU-on-macOS dispatch fixes: `-optShared` forced for TAU tests;
+  `tau_exec -T` tags derived per TAU variant; `TAU_ROOT` cache-shadow
+  bug fixed
+  ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman).
+- `build_and_test.sh` hardened on macOS: honors caller-provided
+  `CC` / `CXX`, only auto-selects Homebrew `llvm`+`flang` on Darwin
+  when both formulae are installed and only fills in the env vars that
+  were not set explicitly; passes `--no-tests=error` so an empty test
+  set is a failure. Bash 3.2 empty-array `set -u` forwarding fixed in
+  the `saltfm` and `fparse-llvm` wrappers
+  ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman).
+- User-facing strings in README, CMake status / error messages, and
+  the `saltfm` / `fparse-llvm` wrapper banners normalized to the
+  canonical `SALT-FM` spelling
+  ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman,
+  refs [#48](https://github.com/ParaToolsInc/salt/pull/48)).
+
 ## [0.4.0] - 2026-05-08
 
 - macOS build support and LLVM 22 added to the CI test matrix; bumps
