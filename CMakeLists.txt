@@ -356,7 +356,8 @@ endif()
 
 if(MLIR_FOUND AND Flang_FOUND)
   message(STATUS "Found Flang -- will build Flang frontend plugin")
-  set(SALT_MOD_SUFFIX ".saltmod" CACHE STRING "TAU Root Directory")
+  set(SALT_MOD_SUFFIX ".saltmod" CACHE STRING
+    "Suffix for SALT-renamed Fortran intrinsic .mod files")
   set(SALT_INC_DIR ${CMAKE_INSTALL_INCLUDEDIR}/salt/flang
     CACHE STRING "SALT include directory for Flang intrinsic modules")
   set(TEST_FORTRAN TRUE)
@@ -495,23 +496,28 @@ install(PROGRAMS ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/saltfm
 # Find TAU locations for testing
 #---------------------
 
-# Check if TAU_ROOT is set as an environment variable and if not set it as a
-# CMake cache variable to /usr/local; otherwise, use the value from the
-# environment.
+# Resolve TAU_ROOT in priority order: explicit -DTAU_ROOT cache var,
+# then $TAU_ROOT environment, then auto-detected from `tau_exec` on PATH.
+# All three paths land in the same cache var so subsequent configures
+# and cache inspectors see one consistent value.
 set(TAU_PATH_SUFFIXES x86_64 x86_64/bin craycnl craycnl/bin apple apple/bin)
-if(NOT DEFINED ENV{TAU_ROOT})
+if(NOT TAU_ROOT AND DEFINED ENV{TAU_ROOT})
+  set(TAU_ROOT "$ENV{TAU_ROOT}" CACHE PATH "TAU Root Directory")
+endif()
+if(NOT TAU_ROOT)
   find_program(TAU_EXEC tau_exec
     PATH_SUFFIXES ${TAU_PATH_SUFFIXES}
   )
   if(NOT TAU_EXEC)
     message(STATUS "TAU not found. Please set TAU_ROOT to the TAU installation directory.")
   else()
-    get_filename_component(TAU_ROOT ${TAU_EXEC} DIRECTORY) # This will be a bin directory
-    get_filename_component(TAU_ROOT ${TAU_ROOT} DIRECTORY) # This might be an arch directory
-    string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" "" TAU_ROOT ${TAU_ROOT})
+    get_filename_component(_tau_root ${TAU_EXEC} DIRECTORY) # bin directory
+    get_filename_component(_tau_root ${_tau_root} DIRECTORY) # arch directory
+    string(REGEX REPLACE "(/x86_64$)|(/apple$)|(/craycnl$)" ""
+      _tau_root "${_tau_root}")
+    set(TAU_ROOT "${_tau_root}" CACHE PATH "TAU Root Directory")
+    unset(_tau_root)
   endif()
-else()
-  set(TAU_ROOT $ENV{TAU_ROOT} CACHE PATH "TAU Root Directory")
 endif()
 
 # Find the TAU makefiles, executables, scripts, libraries, etc.
