@@ -20,19 +20,20 @@ jobs:
         run: |
           {
             echo "LLVM_PREFIX=$(brew --prefix llvm)"
-            echo "FLANG_PREFIX=$(brew --prefix flang)"
-            echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)"
             echo "NCPU=$(sysctl -n hw.ncpu)"
           } >> "$GITHUB_OUTPUT"
 
+      # Only CC/CXX are pinned to Homebrew LLVM. CMAKE_PREFIX_PATH,
+      # CMAKE_OSX_SYSROOT, and -stdlib=libc++ are intentionally left
+      # for SALT's macOS auto-detect logic to populate so this CI leg
+      # actually exercises the path the README recommends; if
+      # auto-detect breaks, the configure-time <ryml_all.hpp> probe
+      # should fail fast here.
       - name: Configure SALT (no TAU)
         run: >
           cmake -G Ninja -S . -B build
           -DCMAKE_C_COMPILER=${{ steps.paths.outputs.LLVM_PREFIX }}/bin/clang
           -DCMAKE_CXX_COMPILER=${{ steps.paths.outputs.LLVM_PREFIX }}/bin/clang++
-          "-DCMAKE_PREFIX_PATH=${{ steps.paths.outputs.LLVM_PREFIX }};${{ steps.paths.outputs.FLANG_PREFIX }}"
-          -DCMAKE_OSX_SYSROOT=${{ steps.paths.outputs.SDKROOT }}
-          -DCMAKE_CXX_FLAGS=-stdlib=libc++
           -DCMAKE_BUILD_TYPE=Release
           -Wdev -Wdeprecated
 
