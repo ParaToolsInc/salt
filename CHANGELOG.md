@@ -8,10 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - macOS build robustness: configure-time auto-detection of
   `CMAKE_OSX_SYSROOT`, `CMAKE_PREFIX_PATH`, and `-stdlib=libc++`;
-  deployment target aligned with the LLVM dylib; sysroot and
-  resource-dir injected for `cparse-llvm` LibTooling; fail-fast
-  `<ryml_all.hpp>` configure-time probe so misconfigured toolchains
-  surface at configure rather than mid-build
+  deployment target aligned with the LLVM dylib (cached with `FORCE`
+  so the raised value persists across re-configures and is visible to
+  cmake-gui / ccmake); sysroot and resource-dir injected for
+  `cparse-llvm` LibTooling; fail-fast `<ryml_all.hpp>` configure-time
+  probe so misconfigured toolchains surface at configure rather than
+  mid-build
   ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman):
   - [#60](https://github.com/ParaToolsInc/salt/issues/60) - macOS
     toolchain auto-detect plus fail-fast on misconfigured SDK / libc++
@@ -20,7 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   helpers; `${CMAKE_BINARY_DIR}/{GCC,LLVM}` namespacing applied to TAU
   test directories; profile-dir and run-check fixtures shared across
   C/C++ and Fortran (Fortran TAU tests gain the `rm_old` / `mkdir`
-  fixtures they were missing); ctest labels added for grouping
+  fixtures they were missing); ctest labels added for grouping;
+  GCC/LLVM compiler-classifier regexes anchored so `clang++` no
+  longer matches the `g++` alternative and gets misrouted into the
+  GCC build subdir
   ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman):
   - [#28](https://github.com/ParaToolsInc/salt/issues/28) - CMake test
     logic cleanup (folding C/C++ and Fortran into a single helper was
@@ -30,7 +35,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman).
 - TAU-on-macOS dispatch fixes: `-optShared` forced for TAU tests;
   `tau_exec -T` tags derived per TAU variant; `TAU_ROOT` cache-shadow
-  bug fixed
+  bug fixed; TAU's `bin/` directory prepended to ctest `PATH` so
+  `tau_exec` / `tau_cc.sh` / `tau_f90.sh` can resolve their sibling
+  helpers (`tau-config`, `tau_compiler.sh`) in in-tree TAU installs,
+  which on macOS is the common layout
   ([#61](https://github.com/ParaToolsInc/salt/pull/61) by @zbeekman).
 - `build_and_test.sh` hardened on macOS: honors caller-provided
   `CC` / `CXX`, only auto-selects Homebrew `llvm`+`flang` on Darwin
