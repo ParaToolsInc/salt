@@ -335,7 +335,11 @@ include(CheckCXXSourceCompiles)
 set(_salt_ryml_save_includes "${CMAKE_REQUIRED_INCLUDES}")
 set(_salt_ryml_save_flags "${CMAKE_REQUIRED_FLAGS}")
 list(APPEND CMAKE_REQUIRED_INCLUDES "${CMAKE_SOURCE_DIR}/include")
-list(APPEND CMAKE_REQUIRED_FLAGS "-std=c++17")
+# CMAKE_REQUIRED_FLAGS is documented as a space-separated string, not a
+# CMake list. `list(APPEND ...)` would introduce a `;` separator that
+# Check*SourceCompiles' downstream `CMAKE_FLAGS -DCOMPILE_DEFINITIONS:
+# STRING=${CMAKE_REQUIRED_FLAGS}` splice would silently truncate.
+string(APPEND CMAKE_REQUIRED_FLAGS " -std=c++17")
 check_cxx_source_compiles("
 #define RYML_SINGLE_HDR_DEFINE_NOW
 #define RYML_SHARED
