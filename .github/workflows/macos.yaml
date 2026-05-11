@@ -1,5 +1,27 @@
 name: macOS
-on: push
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+      - '.VERSION'
+      - 'LICENSE*'
+      - '.gitignore'
+      - '.githooks/**'
+      - 'docs/**'
+      - '.github/workflows/CI.yaml'
+      - '.github/workflows/lint.yaml'
+      - '.github/workflows/version-check.yaml'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '.VERSION'
+      - 'LICENSE*'
+      - '.gitignore'
+      - '.githooks/**'
+      - 'docs/**'
+      - '.github/workflows/CI.yaml'
+      - '.github/workflows/lint.yaml'
+      - '.github/workflows/version-check.yaml'
 
 jobs:
   build:
