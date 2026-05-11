@@ -6,13 +6,13 @@ on:
 jobs:
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    # ubuntu-slim is a 1-core, container-based standard runner with a
+    # minimal preinstalled toolset (shellcheck included). Free on
+    # public repos, 15 min hard job cap. Plenty for a ~30 s lint job.
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
+      # shellcheck is preinstalled on ubuntu-slim; no apt step needed.
       - uses: astral-sh/setup-uv@v8.1.0
       - name: Install cmake-lint
         run: uv tool install cmakelang --with pyyaml

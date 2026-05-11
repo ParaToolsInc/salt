@@ -12,7 +12,7 @@ jobs:
   verify-version-matches-tag:
     name: tag matches .VERSION
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
       - name: Compare tag against .VERSION
@@ -31,7 +31,7 @@ jobs:
   verify-version-format:
     name: .VERSION is valid SemVer
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
       - name: Check .VERSION format
