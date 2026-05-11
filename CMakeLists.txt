@@ -252,7 +252,13 @@ if(APPLE)
           "Raising CMAKE_OSX_DEPLOYMENT_TARGET "
           "${CMAKE_OSX_DEPLOYMENT_TARGET} -> ${CMAKE_MATCH_1} "
           "to match ${_salt_llvm_dylib}")
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "${CMAKE_MATCH_1}")
+        # FORCE so cmake-gui / ccmake and subsequent re-configures see
+        # the raised value; CMAKE_OSX_DEPLOYMENT_TARGET is a cache
+        # variable, so a plain set() would only update the local scope
+        # and let the stale cache entry win on the next configure.
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "${CMAKE_MATCH_1}" CACHE STRING
+          "Minimum macOS deployment target (raised to match LLVM dylib)"
+          FORCE)
       endif()
     endif()
   endif()
