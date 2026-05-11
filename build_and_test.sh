@@ -39,6 +39,6 @@ fi
 cmake -DCMAKE_C_COMPILER="${CC_BIN}" -DCMAKE_CXX_COMPILER="${CXX_BIN}" -Wdev -Wdeprecated -G Ninja -S . -B build
 cmake --build build --parallel 8 --verbose || cmake --build build --verbose
 # `--no-tests=error` causes ctest to fail rather than silently report
-# success when zero tests are registered (e.g. configure picked a SALT
-# variant without tests).
+# success when zero tests are registered (e.g. configure picked a
+# SALT-FM variant without tests).
 ( cd build && ( ctest -j --output-on-failure --no-tests=error || ctest --rerun-failed --verbose --no-tests=error ) )
