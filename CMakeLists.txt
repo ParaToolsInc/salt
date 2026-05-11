@@ -805,9 +805,12 @@ endfunction()
 # `toolchain:<vendor>` ctest label. GCC family -> GCC; Clang/Flang -> LLVM.
 function(_salt_compiler_to_toolchain comp out_var)
   string(TOLOWER "${comp}" _c)
-  if(_c MATCHES "gcc|gfortran|g\\+\\+")
+  # Anchor to full-string match so e.g. `clang++` does not match the
+  # `g\+\+` alternative; allow an optional `-<version>` suffix
+  # (gcc-13, clang-17, 17.0.4, ...).
+  if(_c MATCHES "^(gcc|g\\+\\+|gfortran)(-[0-9]+(\\.[0-9]+)*)?$")
     set(${out_var} "toolchain:GCC" PARENT_SCOPE)
-  elseif(_c MATCHES "clang|flang")
+  elseif(_c MATCHES "^(clang(\\+\\+)?|flang(-new)?)(-[0-9]+(\\.[0-9]+)*)?$")
     set(${out_var} "toolchain:LLVM" PARENT_SCOPE)
   else()
     set(${out_var} "toolchain:${comp}" PARENT_SCOPE)
@@ -820,9 +823,12 @@ endfunction()
 # and as the inflection in TAU_<dir>_MAKEFILE variable lookups.
 function(_salt_compiler_to_dir comp out_var)
   string(TOLOWER "${comp}" _c)
-  if(_c MATCHES "gcc|gfortran|g\\+\\+")
+  # Same vendor classification as _salt_compiler_to_toolchain; see that
+  # function for the regex rationale (full-string anchor + optional
+  # `-<version>` suffix).
+  if(_c MATCHES "^(gcc|g\\+\\+|gfortran)(-[0-9]+(\\.[0-9]+)*)?$")
     set(${out_var} "GCC" PARENT_SCOPE)
-  elseif(_c MATCHES "clang|flang")
+  elseif(_c MATCHES "^(clang(\\+\\+)?|flang(-new)?)(-[0-9]+(\\.[0-9]+)*)?$")
     set(${out_var} "LLVM" PARENT_SCOPE)
   else()
     string(TOUPPER "${comp}" _u)
