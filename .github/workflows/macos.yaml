@@ -25,11 +25,11 @@ jobs:
 
       # Only CC/CXX are pinned to Homebrew LLVM. CMAKE_PREFIX_PATH,
       # CMAKE_OSX_SYSROOT, and -stdlib=libc++ are intentionally left
-      # for SALT's macOS auto-detect logic to populate so this CI leg
+      # for SALT-FM's macOS auto-detect logic to populate so this CI leg
       # actually exercises the path the README recommends; if
       # auto-detect breaks, the configure-time <ryml_all.hpp> probe
       # should fail fast here.
-      - name: Configure SALT (no TAU)
+      - name: Configure SALT-FM (no TAU)
         run: >
           cmake -G Ninja -S . -B build
           -DCMAKE_C_COMPILER=${{ steps.paths.outputs.LLVM_PREFIX }}/bin/clang
@@ -37,7 +37,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -Wdev -Wdeprecated
 
-      - name: Compile SALT
+      - name: Compile SALT-FM
         id: build
         run: |
           echo "Cores: ${{ steps.paths.outputs.NCPU }}"

@@ -27,11 +27,11 @@ jobs:
             echo "Working directory: $(pwd)"
             echo "Working directory contents:"
             ls -la
-      - name: Configure SALT
+      - name: Configure SALT-FM
         run: >
           cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           -DSALT_REQUIRE_TAU=ON -Wdev -Wdeprecated -G Ninja -S . -B build
-      - name: Compile SALT
+      - name: Compile SALT-FM
         id: build
         run: |
           echo "Cores: $(nproc)"
