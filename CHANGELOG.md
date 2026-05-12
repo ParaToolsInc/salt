@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-05-11
+## [0.4.1] - 2026-05-12
 
 - macOS build robustness: configure-time auto-detection of
   `CMAKE_OSX_SYSROOT`, `CMAKE_PREFIX_PATH`, and `-stdlib=libc++`;
@@ -211,8 +211,8 @@ tag, ending with the v0.2.0 SALT-FM milestone.
 - Build fixed under Clang 15 with stricter pedantic diagnostics
   ([#13](https://github.com/ParaToolsInc/salt/pull/13) by @khuck).
 
-[Unreleased]: https://github.com/ParaToolsInc/salt/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/ParaToolsInc/salt/compare/v0.4.0...v0.5.0
+[Unreleased]: https://github.com/ParaToolsInc/salt/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ParaToolsInc/salt/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ParaToolsInc/salt/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ParaToolsInc/salt/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ParaToolsInc/salt/releases/tag/v0.2.0
